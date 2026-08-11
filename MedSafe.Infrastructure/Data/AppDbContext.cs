@@ -25,6 +25,7 @@ public class AppDbContext : DbContext
     public DbSet<ErrorCategory> ErrorCategories => Set<ErrorCategory>();
     public DbSet<DoseUnit> DoseUnits => Set<DoseUnit>();
     public DbSet<Profession> Professions => Set<Profession>();
+    public DbSet<Position> Positions => Set<Position>();
     public DbSet<IncidentReportContributingFactor> IncidentReportContributingFactors => Set<IncidentReportContributingFactor>();
     public DbSet<IncidentReportSeriousnessCriterion> IncidentReportSeriousnessCriteria => Set<IncidentReportSeriousnessCriterion>();
     public DbSet<IncidentReportAttachment> IncidentReportAttachments => Set<IncidentReportAttachment>();
@@ -50,6 +51,18 @@ public class AppDbContext : DbContext
             .HasConstraintName("FK_Users_Profession")
             .OnDelete(DeleteBehavior.NoAction);
 
+        modelBuilder.Entity<Position>()
+            .HasOne<Profession>()
+            .WithMany()
+            .HasForeignKey(p => p.ProfessionId)
+            .HasConstraintName("FK_Position_Profession")
+            .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<Position>()
+            .HasIndex(p => new { p.ProfessionId, p.Name })
+            .IsUnique()
+            .HasDatabaseName("UQ_Position_Profession_Name");
+
         // These tables already exist live (built outside this project's migrations) —
         // map to them for querying but never let `dotnet ef migrations add` touch them.
         modelBuilder.Entity<ContributingFactor>()
@@ -72,6 +85,8 @@ public class AppDbContext : DbContext
             .ToTable("DoseUnit", tb => tb.ExcludeFromMigrations());
         modelBuilder.Entity<Profession>()
             .ToTable("Profession", tb => tb.ExcludeFromMigrations());
+        modelBuilder.Entity<Position>()
+            .ToTable("Position", tb => tb.ExcludeFromMigrations());
         modelBuilder.Entity<Allergy>()
             .ToTable("Allergy", tb => tb.ExcludeFromMigrations());
         modelBuilder.Entity<CurrentMedication>()
