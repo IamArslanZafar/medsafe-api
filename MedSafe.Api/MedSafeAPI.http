@@ -1,0 +1,6 @@
+@MedSafeAPI_HostAddress = http://localhost:5145
+
+GET {{MedSafeAPI_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

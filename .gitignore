@@ -1,0 +1,15 @@
+bin/
+obj/
+*.publish/
+**/publish/
+logs/
+.vs/
+.claude/
+
+# Real secrets — see MedSafe.Api/appsettings.Example.json for the template
+MedSafe.Api/appsettings.json
+
+# Local runtime data
+MedSafe.Api/App_Data/
+MedSafe.Api/wwwroot/imageprofile/
+MedSafe.Api/uploads/
