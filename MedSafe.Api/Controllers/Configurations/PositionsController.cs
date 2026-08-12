@@ -46,10 +46,14 @@ public class PositionsController : ControllerBase
         if (await _db.Positions.AnyAsync(p => p.ProfessionId == dto.ProfessionId && p.Name == dto.Name))
             return Conflict(new { message = "A position with this name already exists for this profession" });
 
-        var nextOrder = dto.DisplayOrder
-            ?? (await _db.Positions.AnyAsync(p => p.ProfessionId == dto.ProfessionId)
-                ? await _db.Positions.Where(p => p.ProfessionId == dto.ProfessionId).MaxAsync(p => p.DisplayOrder) + 1
-                : 1);
+        var nextOrder = dto.DisplayOrder;
+        if (nextOrder is null)
+        {
+            var maxOrder = await _db.Positions
+                .Where(p => p.ProfessionId == dto.ProfessionId)
+                .MaxAsync(p => (int?)p.DisplayOrder);
+            nextOrder = (maxOrder ?? 0) + 1;
+        }
 
         var position = new Position
         {

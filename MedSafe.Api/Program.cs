@@ -2,7 +2,6 @@ using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
-using MedSafeAPI.BackgroundServices;
 using MedSafe.Infrastructure.Data;
 using MedSafe.Infrastructure.Interfaces;
 using MedSafe.Infrastructure.Repository;
@@ -24,13 +23,10 @@ builder.Services.AddScoped<IFileService, FileService>();
 builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
 builder.Services.AddScoped<IIncidentReportService, IncidentReportService>();
 builder.Services.AddScoped<IIncidentAttachmentService, IncidentAttachmentService>();
-builder.Services.AddScoped<IAlertService, AlertService>();
+builder.Services.AddScoped<IIncidentReportReviewService, IncidentReportReviewService>();
 
 // Repositories
 builder.Services.AddScoped<IUserRepository, UserRepository>();
-
-// Background Services
-builder.Services.AddHostedService<AlertMonitorService>();
 
 // JWT Authentication
 var jwtKey = builder.Configuration["Jwt:Key"]!;
@@ -62,7 +58,32 @@ builder.Services.AddCors(opt =>
 
 // Swagger
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+builder.Services.AddSwaggerGen(opt =>
+{
+    opt.AddSecurityDefinition("Bearer", new Microsoft.OpenApi.Models.OpenApiSecurityScheme
+    {
+        Name = "Authorization",
+        Type = Microsoft.OpenApi.Models.SecuritySchemeType.Http,
+        Scheme = "Bearer",
+        BearerFormat = "JWT",
+        In = Microsoft.OpenApi.Models.ParameterLocation.Header,
+        Description = "Paste the JWT access token."
+    });
+    opt.AddSecurityRequirement(new Microsoft.OpenApi.Models.OpenApiSecurityRequirement
+    {
+        {
+            new Microsoft.OpenApi.Models.OpenApiSecurityScheme
+            {
+                Reference = new Microsoft.OpenApi.Models.OpenApiReference
+                {
+                    Type = Microsoft.OpenApi.Models.ReferenceType.SecurityScheme,
+                    Id = "Bearer"
+                }
+            },
+            Array.Empty<string>()
+        }
+    });
+});
 
 // Controllers + Global Exception Filter
 builder.Services.AddControllers(opt =>

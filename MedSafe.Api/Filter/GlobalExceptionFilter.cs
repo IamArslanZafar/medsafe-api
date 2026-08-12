@@ -1,6 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
+using MedSafeAPI.Exceptions;
 
 namespace MedSafeAPI.Filter;
 
@@ -17,6 +18,7 @@ public class GlobalExceptionFilter : IExceptionFilter
             ValidationException ex => (400, ex.Message),
             KeyNotFoundException ex => (404, ex.Message),
             UnauthorizedAccessException ex => (403, ex.Message),
+            ConflictException ex => (409, ex.Message),
             _ => (500, "An unexpected error occurred.")
         };
 

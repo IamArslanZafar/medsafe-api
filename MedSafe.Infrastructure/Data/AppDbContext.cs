@@ -26,6 +26,7 @@ public class AppDbContext : DbContext
     public DbSet<DoseUnit> DoseUnits => Set<DoseUnit>();
     public DbSet<Profession> Professions => Set<Profession>();
     public DbSet<Position> Positions => Set<Position>();
+    public DbSet<IncidentReportMedication> IncidentReportMedications => Set<IncidentReportMedication>();
     public DbSet<IncidentReportContributingFactor> IncidentReportContributingFactors => Set<IncidentReportContributingFactor>();
     public DbSet<IncidentReportSeriousnessCriterion> IncidentReportSeriousnessCriteria => Set<IncidentReportSeriousnessCriterion>();
     public DbSet<IncidentReportAttachment> IncidentReportAttachments => Set<IncidentReportAttachment>();
@@ -38,6 +39,8 @@ public class AppDbContext : DbContext
     public DbSet<CurrentMedication> CurrentMedications => Set<CurrentMedication>();
     public DbSet<IncidentReportAllergy> IncidentReportAllergies => Set<IncidentReportAllergy>();
     public DbSet<IncidentReportCurrentMedication> IncidentReportCurrentMedications => Set<IncidentReportCurrentMedication>();
+    public DbSet<IncidentReportReview> IncidentReportReviews => Set<IncidentReportReview>();
+    public DbSet<IncidentReportStatusHistory> IncidentReportStatusHistories => Set<IncidentReportStatusHistory>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -101,6 +104,8 @@ public class AppDbContext : DbContext
         // for querying but never let `dotnet ef migrations add` touch their structure.
         modelBuilder.Entity<IncidentReport>()
             .ToTable("IncidentReports", tb => tb.ExcludeFromMigrations());
+        modelBuilder.Entity<IncidentReportMedication>()
+            .ToTable("IncidentReportMedication", tb => tb.ExcludeFromMigrations());
         modelBuilder.Entity<IncidentReportContributingFactor>()
             .ToTable("IncidentReportContributingFactor", tb => tb.ExcludeFromMigrations());
         modelBuilder.Entity<IncidentReportSeriousnessCriterion>()
@@ -117,13 +122,10 @@ public class AppDbContext : DbContext
             .ToTable("NotificationStatus", tb => tb.ExcludeFromMigrations());
         modelBuilder.Entity<NotificationUrgency>()
             .ToTable("NotificationUrgency", tb => tb.ExcludeFromMigrations());
-
-        modelBuilder.Entity<IncidentReport>()
-            .HasOne<Route>()
-            .WithMany()
-            .HasForeignKey(i => i.RouteId)
-            .HasConstraintName("FK_IncidentReports_Route")
-            .OnDelete(DeleteBehavior.NoAction);
+        modelBuilder.Entity<IncidentReportReview>()
+            .ToTable("IncidentReportReviews", tb => tb.ExcludeFromMigrations());
+        modelBuilder.Entity<IncidentReportStatusHistory>()
+            .ToTable("IncidentReportStatusHistory", tb => tb.ExcludeFromMigrations());
 
         modelBuilder.Entity<IncidentReport>()
             .HasOne<PatientOutcome>()
@@ -141,22 +143,6 @@ public class AppDbContext : DbContext
             .IsRequired(false);
 
         modelBuilder.Entity<IncidentReport>()
-            .HasOne<Formulation>()
-            .WithMany()
-            .HasForeignKey(i => i.FormulationId)
-            .HasConstraintName("FK_IncidentReports_Formulation")
-            .OnDelete(DeleteBehavior.NoAction)
-            .IsRequired(false);
-
-        modelBuilder.Entity<IncidentReport>()
-            .HasOne<Frequency>()
-            .WithMany()
-            .HasForeignKey(i => i.FrequencyId)
-            .HasConstraintName("FK_IncidentReports_Frequency")
-            .OnDelete(DeleteBehavior.NoAction)
-            .IsRequired(false);
-
-        modelBuilder.Entity<IncidentReport>()
             .HasOne<ErrorCategory>()
             .WithMany()
             .HasForeignKey(i => i.ErrorCategoryId)
@@ -165,10 +151,51 @@ public class AppDbContext : DbContext
             .IsRequired(false);
 
         modelBuilder.Entity<IncidentReport>()
+            .HasOne<Profession>()
+            .WithMany()
+            .HasForeignKey(i => i.ProfessionId)
+            .HasConstraintName("FK_IncidentReports_Profession")
+            .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<Position>()
+            .HasAlternateKey(p => new { p.ProfessionId, p.Id });
+
+        modelBuilder.Entity<IncidentReport>()
+            .HasOne<Position>()
+            .WithMany()
+            .HasForeignKey(i => new { i.ProfessionId, i.PositionId })
+            .HasPrincipalKey(p => new { p.ProfessionId, p.Id })
+            .HasConstraintName("FK_IncidentReports_ProfessionPosition")
+            .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<IncidentReportMedication>()
+            .HasOne(m => m.IncidentReport)
+            .WithMany(r => r.Medications)
+            .HasForeignKey(m => m.IncidentReportId)
+            .HasConstraintName("FK_IncidentReportMedication_IncidentReport");
+
+        modelBuilder.Entity<IncidentReportMedication>()
             .HasOne<DoseUnit>()
             .WithMany()
-            .HasForeignKey(i => i.DoseUnitId)
-            .HasConstraintName("FK_IncidentReports_DoseUnit")
+            .HasForeignKey(m => m.DoseUnitId)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<IncidentReportMedication>()
+            .HasOne<Route>()
+            .WithMany()
+            .HasForeignKey(m => m.RouteId)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<IncidentReportMedication>()
+            .HasOne<Frequency>()
+            .WithMany()
+            .HasForeignKey(m => m.FrequencyId)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<IncidentReportMedication>()
+            .HasOne<Formulation>()
+            .WithMany()
+            .HasForeignKey(m => m.FormulationId)
             .OnDelete(DeleteBehavior.NoAction);
 
         modelBuilder.Entity<IncidentReportContributingFactor>()
@@ -242,7 +269,7 @@ public class AppDbContext : DbContext
             .HasIndex(m => new { m.IncidentReportId, m.CurrentMedicationId }).IsUnique();
 
         modelBuilder.Entity<IncidentNotification>()
-            .HasOne<IncidentReport>()
+            .HasOne(n => n.IncidentReport)
             .WithMany(r => r.Notifications)
             .HasForeignKey(n => n.IncidentReportId)
             .HasConstraintName("FK_IncidentNotifications_IncidentReport");
@@ -254,11 +281,39 @@ public class AppDbContext : DbContext
             .HasConstraintName("FK_IncidentNotifications_NotificationRecipientType")
             .OnDelete(DeleteBehavior.NoAction);
 
-        modelBuilder.Entity<IncidentNotification>()
-            .HasOne<NotificationMethod>()
+        modelBuilder.Entity<IncidentReportReview>()
+            .HasOne(r => r.IncidentReport)
+            .WithOne(i => i.Review)
+            .HasForeignKey<IncidentReportReview>(r => r.IncidentReportId)
+            .HasConstraintName("FK_IncidentReportReviews_IncidentReport")
+            .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<IncidentReportReview>()
+            .HasOne<User>()
             .WithMany()
-            .HasForeignKey(n => n.NotificationMethodId)
-            .HasConstraintName("FK_IncidentNotifications_NotificationMethod")
+            .HasForeignKey(r => r.ReviewerUserId)
+            .HasConstraintName("FK_IncidentReportReviews_Reviewer")
+            .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<IncidentReportReview>()
+            .HasOne<User>()
+            .WithMany()
+            .HasForeignKey(r => r.ActionOwnerUserId)
+            .HasConstraintName("FK_IncidentReportReviews_ActionOwner")
+            .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<IncidentReportStatusHistory>()
+            .HasOne(h => h.IncidentReport)
+            .WithMany(i => i.StatusHistory)
+            .HasForeignKey(h => h.IncidentReportId)
+            .HasConstraintName("FK_IncidentReportStatusHistory_IncidentReport")
+            .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<IncidentReportStatusHistory>()
+            .HasOne<User>()
+            .WithMany()
+            .HasForeignKey(h => h.ChangedByUserId)
+            .HasConstraintName("FK_IncidentReportStatusHistory_ChangedByUser")
             .OnDelete(DeleteBehavior.NoAction);
 
         modelBuilder.Entity<DropdownDefinition>()
@@ -289,19 +344,34 @@ public class AppDbContext : DbContext
             entity.HasIndex(e => e.IncidentReportNumber).IsUnique();
             entity.Property(e => e.IncidentReportNumber).HasMaxLength(30);
             entity.Property(e => e.SubmittedByRole).HasMaxLength(50);
-            entity.Property(e => e.ReportingFacilityUnit).HasMaxLength(150);
             entity.Property(e => e.ReportStatus).HasMaxLength(30);
             entity.Property(e => e.PatientReferenceToken).HasMaxLength(35).IsUnicode(false);
+            entity.Property(e => e.PatientReference).HasMaxLength(100);
+            entity.Property(e => e.PatientName).HasMaxLength(200);
             entity.Property(e => e.PatientSex).HasMaxLength(20);
             entity.Property(e => e.PatientWeightKg).HasPrecision(6, 2);
-            entity.Property(e => e.MedicationName).HasMaxLength(250);
-            entity.Property(e => e.GenericActiveIngredient).HasMaxLength(250);
-            entity.Property(e => e.DoseValue).HasPrecision(18, 4);
-            entity.Property(e => e.BatchLotNumber).HasMaxLength(100);
             entity.Property(e => e.ReportType).HasMaxLength(30);
             entity.Property(e => e.SuspectedCausality).HasMaxLength(100);
             entity.Property(e => e.HarmLevelCode).HasMaxLength(1).IsUnicode(false).IsFixedLength();
             entity.Property(e => e.IncidentLocation).HasMaxLength(200);
+        });
+
+        modelBuilder.Entity<IncidentReportMedication>(entity =>
+        {
+            entity.Property(e => e.MedicationName).HasMaxLength(250);
+            entity.Property(e => e.DoseValue).HasPrecision(18, 4);
+        });
+
+        modelBuilder.Entity<IncidentReportReview>(entity =>
+        {
+            entity.Property(e => e.ResolutionStatus).HasMaxLength(30);
+        });
+
+        modelBuilder.Entity<IncidentReportStatusHistory>(entity =>
+        {
+            entity.Property(e => e.FromStatus).HasMaxLength(30);
+            entity.Property(e => e.ToStatus).HasMaxLength(30);
+            entity.Property(e => e.Reason).HasMaxLength(250);
         });
 
         modelBuilder.Entity<IncidentReportAttachment>(entity =>
@@ -314,8 +384,7 @@ public class AppDbContext : DbContext
 
         modelBuilder.Entity<IncidentNotification>(entity =>
         {
-            entity.Property(e => e.Status).HasMaxLength(50);
-            entity.Property(e => e.Notes).HasMaxLength(1000);
+            entity.Property(e => e.PersonName).HasMaxLength(200);
         });
 
         modelBuilder.Entity<NotificationRecipientType>(entity =>

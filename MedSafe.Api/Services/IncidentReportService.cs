@@ -13,13 +13,11 @@ public class IncidentReportService : IIncidentReportService
 
     private readonly AppDbContext _db;
     private readonly ICurrentUserService _currentUser;
-    private readonly IAlertService _alertService;
 
-    public IncidentReportService(AppDbContext db, ICurrentUserService currentUser, IAlertService alertService)
+    public IncidentReportService(AppDbContext db, ICurrentUserService currentUser)
     {
         _db = db;
         _currentUser = currentUser;
-        _alertService = alertService;
     }
 
     public async Task<SubmitIncidentReportResponse> SubmitAsync(SubmitIncidentReportRequest request, CancellationToken cancellationToken)
@@ -34,10 +32,13 @@ public class IncidentReportService : IIncidentReportService
             _db.IncidentReports.Add(incident);
             await _db.SaveChangesAsync(cancellationToken);
 
-            AddContributingFactors(incident.Id, request.ContributingFactorIds);
-            AddSeriousnessCriteria(incident.Id, request.SeriousnessCriterionIds);
+            AddMedications(incident.Id, request.Medications);
             AddAllergies(incident.Id, request.KnownAllergyIds);
             AddCurrentMedications(incident.Id, request.CurrentMedicationIds);
+            AddContributingFactors(incident.Id, request.ContributingFactorIds);
+            AddSeriousnessCriteria(incident.Id, request.SeriousnessCriterionIds);
+            AddNotifications(incident.Id, request.Notifications);
+            AddInitialStatusHistory(incident.Id);
             await _db.SaveChangesAsync(cancellationToken);
 
             AddAuditLog(incident);
@@ -50,9 +51,6 @@ public class IncidentReportService : IIncidentReportService
             await transaction.RollbackAsync(cancellationToken);
             throw;
         }
-
-        // Runs after the main transaction succeeds — a failure here must not roll back the report.
-        await _alertService.EvaluateIncidentAsync(incident.Id, cancellationToken);
 
         return new SubmitIncidentReportResponse
         {
@@ -67,11 +65,13 @@ public class IncidentReportService : IIncidentReportService
     public async Task<IncidentReportDto?> GetByIdAsync(int id, CancellationToken cancellationToken)
     {
         var report = await _db.IncidentReports
+            .Include(r => r.Medications)
             .Include(r => r.ContributingFactors)
             .Include(r => r.SeriousnessCriteria)
             .Include(r => r.AllergyLinks)
             .Include(r => r.CurrentMedicationLinks)
             .Include(r => r.Attachments)
+            .Include(r => r.Notifications)
             .FirstOrDefaultAsync(r => r.Id == id, cancellationToken);
 
         return report == null ? null : MapToDto(report);
@@ -85,20 +85,51 @@ public class IncidentReportService : IIncidentReportService
             query = query.Where(r => r.SubmittedByUserId == _currentUser.UserId);
 
         var reports = await query
+            .Include(r => r.Medications)
             .Include(r => r.ContributingFactors)
             .Include(r => r.SeriousnessCriteria)
             .Include(r => r.AllergyLinks)
             .Include(r => r.CurrentMedicationLinks)
             .Include(r => r.Attachments)
+            .Include(r => r.Notifications)
             .OrderByDescending(r => r.SubmittedAt)
             .ToListAsync(cancellationToken);
 
         return reports.Select(MapToDto).ToList();
     }
 
+    public async Task<IncidentReportSummaryDto> GetSummaryAsync(CancellationToken cancellationToken)
+    {
+        var query = _db.IncidentReports.AsNoTracking().AsQueryable();
+
+        if (_currentUser.Role == "Nurse")
+            query = query.Where(x => x.SubmittedByUserId == _currentUser.UserId);
+
+        var summary = await query
+            .GroupBy(x => 1)
+            .Select(g => new IncidentReportSummaryDto
+            {
+                TotalReports = g.Count(),
+                AwaitingReview = g.Count(x => x.ReportStatus == "Pending" || x.ReportStatus == "UnderReview"),
+                HarmEvents = g.Count(x =>
+                    x.HarmLevelCode == "E" || x.HarmLevelCode == "F" || x.HarmLevelCode == "G" ||
+                    x.HarmLevelCode == "H" || x.HarmLevelCode == "I"),
+                ClosedCases = g.Count(x => x.ReportStatus == "Closed")
+            })
+            .FirstOrDefaultAsync(cancellationToken);
+
+        return summary ?? new IncidentReportSummaryDto();
+    }
+
     private async Task ValidateRequestAsync(SubmitIncidentReportRequest request, CancellationToken cancellationToken)
     {
         // Step 1 - Patient
+        if (string.IsNullOrWhiteSpace(request.PatientName))
+            throw new ValidationException("Patient name is required.");
+
+        if (string.IsNullOrWhiteSpace(request.PatientRef))
+            throw new ValidationException("Patient reference / MRN is required.");
+
         if (request.PatientAge < 0 || request.PatientAge > 130)
             throw new ValidationException("Invalid patient age.");
 
@@ -108,37 +139,37 @@ public class IncidentReportService : IIncidentReportService
         if (request.PatientWeightKg is <= 0)
             throw new ValidationException("Patient weight must be greater than zero.");
 
-        // Step 2 - Medication
-        if (string.IsNullOrWhiteSpace(request.MedicationName))
-            throw new ValidationException("Medication name is required.");
+        // Step 2 - Medications
+        if (request.Medications.Count == 0)
+            throw new ValidationException("At least one medication is required.");
 
-        if (request.DoseValue <= 0)
-            throw new ValidationException("Dose must be greater than zero.");
+        foreach (var medication in request.Medications)
+        {
+            if (string.IsNullOrWhiteSpace(medication.MedicationName))
+                throw new ValidationException("Medication name is required.");
 
-        if (!await _db.DoseUnits.AnyAsync(x => x.Id == request.DoseUnitId && x.IsActive, cancellationToken))
-            throw new ValidationException("Invalid dose unit.");
+            if (medication.DoseValue <= 0)
+                throw new ValidationException("Dose must be greater than zero.");
 
-        if (!await _db.Routes.AnyAsync(x => x.Id == request.RouteId && x.IsActive, cancellationToken))
-            throw new ValidationException("Invalid medication route.");
+            if (medication.MedicationGivenAt == default)
+                throw new ValidationException("Medication date/time is required.");
 
-        if (request.FrequencyId.HasValue &&
-            !await _db.Frequencies.AnyAsync(x => x.Id == request.FrequencyId && x.IsActive, cancellationToken))
-            throw new ValidationException("Invalid frequency.");
+            if (!await _db.DoseUnits.AnyAsync(x => x.Id == medication.DoseUnitId && x.IsActive, cancellationToken))
+                throw new ValidationException("Invalid dose unit.");
 
-        if (request.FormulationId.HasValue &&
-            !await _db.Formulations.AnyAsync(x => x.Id == request.FormulationId && x.IsActive, cancellationToken))
-            throw new ValidationException("Invalid formulation.");
+            if (!await _db.Routes.AnyAsync(x => x.Id == medication.RouteId && x.IsActive, cancellationToken))
+                throw new ValidationException("Invalid route.");
 
-        if (string.IsNullOrWhiteSpace(request.ReportingFacilityUnit))
-            throw new ValidationException("Reporting facility/unit is required.");
+            if (medication.FrequencyId.HasValue &&
+                !await _db.Frequencies.AnyAsync(x => x.Id == medication.FrequencyId && x.IsActive, cancellationToken))
+                throw new ValidationException("Invalid frequency.");
+
+            if (medication.FormulationId.HasValue &&
+                !await _db.Formulations.AnyAsync(x => x.Id == medication.FormulationId && x.IsActive, cancellationToken))
+                throw new ValidationException("Invalid formulation.");
+        }
 
         // Step 3 - Incident / harm
-        if (string.IsNullOrWhiteSpace(request.IncidentLocation))
-            throw new ValidationException("Incident location is required.");
-
-        if (string.IsNullOrWhiteSpace(request.IncidentNarrative))
-            throw new ValidationException("Incident narrative is required.");
-
         if (!ValidHarmLevels.Contains(request.HarmLevelCode?.ToUpperInvariant()))
             throw new ValidationException("Invalid harm level.");
 
@@ -168,6 +199,15 @@ public class IncidentReportService : IIncidentReportService
         if (request.StageOfProcessId.HasValue &&
             !await _db.StageOfProcesses.AnyAsync(x => x.Id == request.StageOfProcessId && x.IsActive, cancellationToken))
             throw new ValidationException("Invalid stage of process.");
+
+        if (request.IncidentOccurredAt == default)
+            throw new ValidationException("Incident date and time is required.");
+
+        if (string.IsNullOrWhiteSpace(request.IncidentLocation))
+            throw new ValidationException("Incident location / unit is required.");
+
+        if (string.IsNullOrWhiteSpace(request.IncidentNarrative))
+            throw new ValidationException("Incident narrative is required.");
 
         // Step 4 - Outcome
         if (!await _db.PatientOutcomes.AnyAsync(x => x.Id == request.PatientOutcomeId && x.IsActive, cancellationToken))
@@ -209,6 +249,30 @@ public class IncidentReportService : IIncidentReportService
             if (validCount != currentMedicationIds.Count)
                 throw new ValidationException("One or more current medications are invalid.");
         }
+
+        // Step 4 - Profession / Position
+        var professionExists = await _db.Professions.AnyAsync(x => x.Id == request.ProfessionId && x.IsActive, cancellationToken);
+        if (!professionExists)
+            throw new ValidationException("Invalid profession.");
+
+        var validPosition = await _db.Positions.AnyAsync(
+            x => x.Id == request.PositionId && x.ProfessionId == request.ProfessionId && x.IsActive, cancellationToken);
+        if (!validPosition)
+            throw new ValidationException("Invalid position for selected profession.");
+
+        foreach (var notification in request.Notifications)
+        {
+            if (string.IsNullOrWhiteSpace(notification.PersonName))
+                throw new ValidationException("Person notified name is required.");
+
+            if (notification.NotifiedAt == default)
+                throw new ValidationException("Notification date/time is required.");
+
+            var validType = await _db.NotificationRecipientTypes
+                .AnyAsync(x => x.Id == notification.NotificationTypeId && x.IsActive, cancellationToken);
+            if (!validType)
+                throw new ValidationException("Invalid notification type.");
+        }
     }
 
     private IncidentReport BuildIncidentReport(SubmitIncidentReportRequest request)
@@ -221,27 +285,14 @@ public class IncidentReportService : IIncidentReportService
             SubmittedAt = DateTime.UtcNow,
             SubmittedByUserId = _currentUser.UserId,
             SubmittedByRole = _currentUser.Role,
-            ReportStatus = "Submitted",
-
-            // Location
-            ReportingFacilityUnit = request.ReportingFacilityUnit.Trim(),
+            ReportStatus = "Pending",
 
             // Step 1
+            PatientName = request.PatientName.Trim(),
+            PatientReference = request.PatientRef.Trim(),
             PatientAge = request.PatientAge,
             PatientSex = request.PatientSex.Trim(),
             PatientWeightKg = request.PatientWeightKg,
-            PatientMedicalHistory = request.PatientMedicalHistory?.Trim(),
-
-            // Step 2
-            MedicationName = request.MedicationName.Trim(),
-            GenericActiveIngredient = request.GenericActiveIngredient?.Trim(),
-            DoseValue = request.DoseValue,
-            DoseUnitId = request.DoseUnitId,
-            RouteId = request.RouteId,
-            FrequencyId = request.FrequencyId,
-            FormulationId = request.FormulationId,
-            MedicationGivenAt = request.MedicationGivenAt,
-            BatchLotNumber = request.BatchLotNumber?.Trim(),
 
             // Step 3
             ReportType = request.ReportType.Trim(),
@@ -253,12 +304,36 @@ public class IncidentReportService : IIncidentReportService
             IncidentOccurredAt = request.IncidentOccurredAt,
             IncidentLocation = request.IncidentLocation.Trim(),
             IncidentNarrative = request.IncidentNarrative.Trim(),
+            PatientOutcomeId = request.PatientOutcomeId,
 
             // Step 4
+            ProfessionId = request.ProfessionId,
+            PositionId = request.PositionId,
+
+            // Step 5
             ImmediateActionTaken = request.ImmediateActionTaken?.Trim(),
-            PatientOutcomeId = request.PatientOutcomeId,
             PatientOutcomeDetails = request.PatientOutcomeDetails?.Trim()
         };
+    }
+
+    private void AddMedications(int incidentReportId, List<IncidentMedicationRequest> medications)
+    {
+        foreach (var medication in medications)
+        {
+            _db.IncidentReportMedications.Add(new IncidentReportMedication
+            {
+                IncidentReportId = incidentReportId,
+                MedicationName = medication.MedicationName.Trim(),
+                DoseValue = medication.DoseValue,
+                DoseUnitId = medication.DoseUnitId,
+                RouteId = medication.RouteId,
+                FrequencyId = medication.FrequencyId,
+                FormulationId = medication.FormulationId,
+                MedicationGivenAt = medication.MedicationGivenAt,
+                CreatedBy = _currentUser.UserId,
+                CreatedDate = DateTime.UtcNow
+            });
+        }
     }
 
     private void AddContributingFactors(int incidentReportId, List<int> contributingFactorIds)
@@ -317,6 +392,35 @@ public class IncidentReportService : IIncidentReportService
         }
     }
 
+    private void AddNotifications(int incidentReportId, List<ManualNotificationRequest> notifications)
+    {
+        foreach (var notification in notifications)
+        {
+            _db.IncidentNotifications.Add(new IncidentNotification
+            {
+                IncidentReportId = incidentReportId,
+                NotificationTypeId = notification.NotificationTypeId,
+                PersonName = notification.PersonName.Trim(),
+                NotifiedAt = notification.NotifiedAt,
+                CreatedBy = _currentUser.UserId,
+                CreatedDate = DateTime.UtcNow
+            });
+        }
+    }
+
+    private void AddInitialStatusHistory(int incidentReportId)
+    {
+        _db.IncidentReportStatusHistories.Add(new IncidentReportStatusHistory
+        {
+            IncidentReportId = incidentReportId,
+            FromStatus = null,
+            ToStatus = "Pending",
+            ChangedByUserId = _currentUser.UserId,
+            ChangedAt = DateTime.UtcNow,
+            Reason = "Report submitted"
+        });
+    }
+
     private void AddAuditLog(IncidentReport incident)
     {
         _db.AuditLogs.Add(new AuditLog
@@ -344,24 +448,26 @@ public class IncidentReportService : IIncidentReportService
         SubmittedAt = r.SubmittedAt,
         SubmittedByUserId = r.SubmittedByUserId,
         SubmittedByRole = r.SubmittedByRole,
-        ReportingFacilityUnit = r.ReportingFacilityUnit,
         ReportStatus = r.ReportStatus,
         PatientReferenceToken = r.PatientReferenceToken,
+        PatientReference = r.PatientReference,
+        PatientName = r.PatientName,
         PatientAge = r.PatientAge,
         PatientSex = r.PatientSex,
         PatientWeightKg = r.PatientWeightKg,
-        PatientMedicalHistory = r.PatientMedicalHistory,
         KnownAllergyIds = r.AllergyLinks.Select(a => a.AllergyId).ToList(),
         CurrentMedicationIds = r.CurrentMedicationLinks.Select(m => m.CurrentMedicationId).ToList(),
-        MedicationName = r.MedicationName,
-        GenericActiveIngredient = r.GenericActiveIngredient,
-        DoseValue = r.DoseValue,
-        DoseUnitId = r.DoseUnitId,
-        RouteId = r.RouteId,
-        FrequencyId = r.FrequencyId,
-        FormulationId = r.FormulationId,
-        MedicationGivenAt = r.MedicationGivenAt,
-        BatchLotNumber = r.BatchLotNumber,
+        Medications = r.Medications.Select(m => new IncidentMedicationDto
+        {
+            Id = m.Id,
+            MedicationName = m.MedicationName,
+            DoseValue = m.DoseValue,
+            DoseUnitId = m.DoseUnitId,
+            RouteId = m.RouteId,
+            FrequencyId = m.FrequencyId,
+            FormulationId = m.FormulationId,
+            MedicationGivenAt = m.MedicationGivenAt
+        }).ToList(),
         ReportType = r.ReportType,
         ErrorCategoryId = r.ErrorCategoryId,
         StageOfProcessId = r.StageOfProcessId,
@@ -373,6 +479,15 @@ public class IncidentReportService : IIncidentReportService
         IncidentNarrative = r.IncidentNarrative,
         ContributingFactorIds = r.ContributingFactors.Select(f => f.ContributingFactorId).ToList(),
         SeriousnessCriterionIds = r.SeriousnessCriteria.Select(c => c.SeriousnessCriterionId).ToList(),
+        ProfessionId = r.ProfessionId,
+        PositionId = r.PositionId,
+        Notifications = r.Notifications.Select(n => new ManualNotificationDto
+        {
+            Id = n.Id,
+            NotificationTypeId = n.NotificationTypeId,
+            PersonName = n.PersonName,
+            NotifiedAt = n.NotifiedAt
+        }).ToList(),
         ImmediateActionTaken = r.ImmediateActionTaken,
         PatientOutcomeId = r.PatientOutcomeId,
         PatientOutcomeDetails = r.PatientOutcomeDetails,
