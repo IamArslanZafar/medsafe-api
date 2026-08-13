@@ -1,9 +1,9 @@
-using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using MedSafe.Infrastructure.Data;
 using MedSafeAPI.DTOs;
+using MedSafeAPI.Services;
 using MedSafe.Models;
 
 namespace MedSafeAPI.Controllers;
@@ -14,8 +14,13 @@ namespace MedSafeAPI.Controllers;
 public class AlertsController : ControllerBase
 {
     private readonly AppDbContext _db;
+    private readonly ICurrentUserService _currentUser;
 
-    public AlertsController(AppDbContext db) => _db = db;
+    public AlertsController(AppDbContext db, ICurrentUserService currentUser)
+    {
+        _db = db;
+        _currentUser = currentUser;
+    }
 
     [HttpGet]
     public async Task<IActionResult> GetAlerts()
@@ -47,6 +52,24 @@ public class AlertsController : ControllerBase
         return Ok(MapToDto(rule));
     }
 
+    [HttpPut("{id}")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> UpdateAlert(int id, AlertRuleUpdateDto dto)
+    {
+        var rule = await _db.AlertRules.FindAsync(id);
+        if (rule == null) return NotFound();
+
+        rule.Name = dto.Name;
+        rule.TriggerCondition = dto.TriggerCondition;
+        rule.TargetRoles = dto.TargetRoles;
+        rule.Urgency = dto.Urgency;
+        rule.Description = dto.Description;
+        rule.DeliveryConfig = dto.DeliveryConfig;
+
+        await _db.SaveChangesAsync();
+        return Ok(MapToDto(rule));
+    }
+
     [HttpPut("{id}/toggle")]
     [Authorize(Roles = "Admin")]
     public async Task<IActionResult> Toggle(int id)
@@ -69,6 +92,41 @@ public class AlertsController : ControllerBase
         _db.AlertRules.Remove(rule);
         await _db.SaveChangesAsync();
         return Ok(new { message = "Alert rule deleted" });
+    }
+
+    // Simulated — there's no email/SMS delivery integration wired up yet, so this
+    // records that a test was run (LastTriggered + audit log) without actually
+    // sending anything, so Admins can confirm a rule's config looks right.
+    [HttpPost("{id}/test")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> Test(int id)
+    {
+        var rule = await _db.AlertRules.FindAsync(id);
+        if (rule == null) return NotFound();
+
+        var now = DateTime.UtcNow;
+        rule.LastTriggered = now;
+
+        _db.AuditLogs.Add(new AuditLog
+        {
+            UserId = _currentUser.UserId,
+            UserName = _currentUser.Name,
+            Action = "ALERT_RULE_TESTED",
+            Details = $"Test notification simulated for rule {rule.RuleId} ({rule.Name}).",
+            Timestamp = now
+        });
+
+        await _db.SaveChangesAsync();
+
+        return Ok(new AlertRuleTestResponseDto
+        {
+            RuleId = rule.RuleId,
+            Name = rule.Name,
+            TargetRoles = rule.TargetRoles,
+            Urgency = rule.Urgency,
+            Message = $"Test notification simulated for \"{rule.Name}\" — no real delivery channel is configured yet, so nothing was actually sent.",
+            TestedAt = now
+        });
     }
 
     private static AlertRuleResponseDto MapToDto(AlertRule a) => new()

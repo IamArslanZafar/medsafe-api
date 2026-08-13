@@ -24,6 +24,7 @@ builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
 builder.Services.AddScoped<IIncidentReportService, IncidentReportService>();
 builder.Services.AddScoped<IIncidentAttachmentService, IncidentAttachmentService>();
 builder.Services.AddScoped<IIncidentReportReviewService, IncidentReportReviewService>();
+builder.Services.AddScoped<IDashboardService, DashboardService>();
 
 // Repositories
 builder.Services.AddScoped<IUserRepository, UserRepository>();
