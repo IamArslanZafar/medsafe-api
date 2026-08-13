@@ -77,12 +77,9 @@ public class IncidentReportService : IIncidentReportService
         return report == null ? null : MapToDto(report);
     }
 
-    public async Task<List<IncidentReportDto>> GetListAsync(CancellationToken cancellationToken)
+    public async Task<List<IncidentReportDto>> GetListAsync(IncidentReportListRequest request, CancellationToken cancellationToken)
     {
-        var query = _db.IncidentReports.AsQueryable();
-
-        if (_currentUser.Role == "Nurse")
-            query = query.Where(r => r.SubmittedByUserId == _currentUser.UserId);
+        var query = ApplyFilters(_db.IncidentReports.AsQueryable(), request);
 
         var reports = await query
             .Include(r => r.Medications)
@@ -98,12 +95,9 @@ public class IncidentReportService : IIncidentReportService
         return reports.Select(MapToDto).ToList();
     }
 
-    public async Task<IncidentReportSummaryDto> GetSummaryAsync(CancellationToken cancellationToken)
+    public async Task<IncidentReportSummaryDto> GetSummaryAsync(IncidentReportListRequest request, CancellationToken cancellationToken)
     {
-        var query = _db.IncidentReports.AsNoTracking().AsQueryable();
-
-        if (_currentUser.Role == "Nurse")
-            query = query.Where(x => x.SubmittedByUserId == _currentUser.UserId);
+        var query = ApplyFilters(_db.IncidentReports.AsNoTracking().AsQueryable(), request);
 
         var summary = await query
             .GroupBy(x => 1)
@@ -119,6 +113,50 @@ public class IncidentReportService : IIncidentReportService
             .FirstOrDefaultAsync(cancellationToken);
 
         return summary ?? new IncidentReportSummaryDto();
+    }
+
+    // Shared by GetListAsync/GetSummaryAsync so both stay in sync. Only Admin sees
+    // every report — every other role (Nurse, Physician, Pharmacist) is scoped to
+    // reports they submitted themselves. Note: this means Physician can no longer
+    // see Nurse-submitted reports to review/sign off on — an explicit, confirmed
+    // tradeoff, not an oversight.
+    private IQueryable<IncidentReport> ApplyFilters(IQueryable<IncidentReport> query, IncidentReportListRequest request)
+    {
+        if (_currentUser.Role != "Admin")
+            query = query.Where(r => r.SubmittedByUserId == _currentUser.UserId);
+
+        if (request.StartDate.HasValue && request.EndDate.HasValue)
+        {
+            var start = request.StartDate.Value.Date;
+            var end = request.EndDate.Value.Date;
+            query = query.Where(r => r.SubmittedAt.Date >= start && r.SubmittedAt.Date <= end);
+        }
+
+        if (!string.IsNullOrWhiteSpace(request.FacilityUnit) && request.FacilityUnit != "All Units")
+            query = query.Where(r => r.IncidentLocation == request.FacilityUnit);
+
+        if (!string.IsNullOrWhiteSpace(request.MedicationName))
+            query = query.Where(r => r.Medications.Any(m => m.MedicationName == request.MedicationName));
+
+        if (request.ErrorCategoryId.HasValue)
+            query = query.Where(r => r.ErrorCategoryId == request.ErrorCategoryId);
+
+        if (request.StageOfProcessId.HasValue)
+            query = query.Where(r => r.StageOfProcessId == request.StageOfProcessId);
+
+        if (request.PatientOutcomeId.HasValue)
+            query = query.Where(r => r.PatientOutcomeId == request.PatientOutcomeId);
+
+        if (!string.IsNullOrWhiteSpace(request.SuspectedCausality))
+            query = query.Where(r => r.SuspectedCausality == request.SuspectedCausality);
+
+        if (request.ContributingFactorId.HasValue)
+            query = query.Where(r => r.ContributingFactors.Any(cf => cf.ContributingFactorId == request.ContributingFactorId));
+
+        if (request.SeriousnessCriterionId.HasValue)
+            query = query.Where(r => r.SeriousnessCriteria.Any(sc => sc.SeriousnessCriterionId == request.SeriousnessCriterionId));
+
+        return query;
     }
 
     private async Task ValidateRequestAsync(SubmitIncidentReportRequest request, CancellationToken cancellationToken)

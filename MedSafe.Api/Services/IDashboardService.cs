@@ -4,5 +4,5 @@ namespace MedSafeAPI.Services;
 
 public interface IDashboardService
 {
-    Task<DashboardSummaryDto> GetSummaryAsync(string? facilityUnit, DateTime? startDate, DateTime? endDate, CancellationToken cancellationToken);
+    Task<DashboardSummaryDto> GetSummaryAsync(DashboardSummaryRequest request, CancellationToken cancellationToken);
 }

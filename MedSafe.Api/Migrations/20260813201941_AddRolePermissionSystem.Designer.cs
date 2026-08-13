@@ -4,6 +4,7 @@ using MedSafe.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace MedSafeAPI.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260813201941_AddRolePermissionSystem")]
+    partial class AddRolePermissionSystem
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -1469,21 +1472,6 @@ namespace MedSafeAPI.Migrations
                             ParentId = 20,
                             PermissionTag = "dashboard.view",
                             SystemModuleId = 8
-                        },
-                        new
-                        {
-                            Id = 22,
-                            Name = "Training & Support",
-                            PermissionTag = "training",
-                            SystemModuleId = 9
-                        },
-                        new
-                        {
-                            Id = 23,
-                            Name = "View Training & Support",
-                            ParentId = 22,
-                            PermissionTag = "training.view",
-                            SystemModuleId = 9
                         });
                 });
 
@@ -1787,16 +1775,6 @@ namespace MedSafeAPI.Migrations
                         },
                         new
                         {
-                            RoleId = 3,
-                            PermissionId = 22
-                        },
-                        new
-                        {
-                            RoleId = 3,
-                            PermissionId = 23
-                        },
-                        new
-                        {
                             RoleId = 2,
                             PermissionId = 1
                         },
@@ -1832,16 +1810,6 @@ namespace MedSafeAPI.Migrations
                         },
                         new
                         {
-                            RoleId = 2,
-                            PermissionId = 22
-                        },
-                        new
-                        {
-                            RoleId = 2,
-                            PermissionId = 23
-                        },
-                        new
-                        {
                             RoleId = 1,
                             PermissionId = 1
                         },
@@ -1872,16 +1840,6 @@ namespace MedSafeAPI.Migrations
                         },
                         new
                         {
-                            RoleId = 1,
-                            PermissionId = 22
-                        },
-                        new
-                        {
-                            RoleId = 1,
-                            PermissionId = 23
-                        },
-                        new
-                        {
                             RoleId = 4,
                             PermissionId = 1
                         },
@@ -1899,16 +1857,6 @@ namespace MedSafeAPI.Migrations
                         {
                             RoleId = 4,
                             PermissionId = 21
-                        },
-                        new
-                        {
-                            RoleId = 4,
-                            PermissionId = 22
-                        },
-                        new
-                        {
-                            RoleId = 4,
-                            PermissionId = 23
                         });
                 });
 
@@ -2118,13 +2066,6 @@ namespace MedSafeAPI.Migrations
                             Description = "Viewing analytics dashboard",
                             DisplayOrder = 8,
                             Name = "Dashboard"
-                        },
-                        new
-                        {
-                            Id = 9,
-                            Description = "Viewing training/reference and support resources",
-                            DisplayOrder = 9,
-                            Name = "Training & Support"
                         });
                 });
 

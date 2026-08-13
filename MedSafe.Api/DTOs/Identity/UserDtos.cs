@@ -8,6 +8,7 @@ public class UserResponseDto
     public string Name { get; set; } = string.Empty;
     public string Email { get; set; } = string.Empty;
     public string Role { get; set; } = string.Empty;
+    public int? RoleId { get; set; }
     public string? Unit { get; set; }
     public string? Title { get; set; }
     public int? ProfessionId { get; set; }
@@ -20,4 +21,9 @@ public class UserResponseDto
 public class UpdateUserStatusDto
 {
     [Required] public string Status { get; set; } = string.Empty; // active | inactive
+}
+
+public class UpdateUserRoleDto
+{
+    [Required] public int RoleId { get; set; }
 }

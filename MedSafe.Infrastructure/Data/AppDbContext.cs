@@ -41,6 +41,10 @@ public class AppDbContext : DbContext
     public DbSet<IncidentReportCurrentMedication> IncidentReportCurrentMedications => Set<IncidentReportCurrentMedication>();
     public DbSet<IncidentReportReview> IncidentReportReviews => Set<IncidentReportReview>();
     public DbSet<IncidentReportStatusHistory> IncidentReportStatusHistories => Set<IncidentReportStatusHistory>();
+    public DbSet<Role> Roles => Set<Role>();
+    public DbSet<SystemModule> SystemModules => Set<SystemModule>();
+    public DbSet<Permission> Permissions => Set<Permission>();
+    public DbSet<RolePermission> RolePermissions => Set<RolePermission>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -436,5 +440,141 @@ public class AppDbContext : DbContext
             entity.Property(e => e.Name).HasMaxLength(200);
             entity.Property(e => e.Description).HasMaxLength(500);
         });
+
+        // ── Role / Permission ────────────────────────────────────────────
+        modelBuilder.Entity<Role>(entity =>
+        {
+            entity.HasIndex(e => e.Name).IsUnique();
+            entity.Property(e => e.Name).HasMaxLength(100);
+            entity.Property(e => e.Description).HasMaxLength(500);
+        });
+
+        modelBuilder.Entity<SystemModule>(entity =>
+        {
+            entity.HasIndex(e => e.Name).IsUnique();
+            entity.Property(e => e.Name).HasMaxLength(100);
+            entity.Property(e => e.Description).HasMaxLength(500);
+        });
+
+        modelBuilder.Entity<Permission>(entity =>
+        {
+            entity.Property(e => e.Name).HasMaxLength(150);
+            entity.Property(e => e.PermissionTag).HasMaxLength(150);
+            entity.HasIndex(e => e.PermissionTag).IsUnique();
+
+            entity.HasOne<SystemModule>()
+                .WithMany(m => m.Permissions)
+                .HasForeignKey(p => p.SystemModuleId)
+                .HasConstraintName("FK_Permissions_SystemModule")
+                .OnDelete(DeleteBehavior.NoAction);
+
+            // Self-referencing tree — a permission's parent within the same module.
+            entity.HasOne<Permission>()
+                .WithMany()
+                .HasForeignKey(p => p.ParentId)
+                .HasConstraintName("FK_Permissions_Parent")
+                .OnDelete(DeleteBehavior.NoAction);
+        });
+
+        modelBuilder.Entity<RolePermission>(entity =>
+        {
+            entity.HasKey(rp => new { rp.RoleId, rp.PermissionId });
+
+            entity.HasOne(rp => rp.Role)
+                .WithMany(r => r.RolePermissions)
+                .HasForeignKey(rp => rp.RoleId)
+                .HasConstraintName("FK_RolePermissions_Role")
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(rp => rp.Permission)
+                .WithMany(p => p.RolePermissions)
+                .HasForeignKey(rp => rp.PermissionId)
+                .HasConstraintName("FK_RolePermissions_Permission")
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<User>()
+            .HasOne<Role>()
+            .WithMany()
+            .HasForeignKey(u => u.RoleId)
+            .HasConstraintName("FK_Users_Role")
+            .OnDelete(DeleteBehavior.NoAction)
+            .IsRequired(false);
+
+        SeedRolePermissionData(modelBuilder);
+    }
+
+    // Starting catalog matching MedSafe's current feature set and the existing
+    // frontend ROLE_PERMISSIONS map — editable afterwards through the Roles UI,
+    // this just gives every environment (dev/live) the same non-empty baseline
+    // instead of starting with zero roles/permissions defined.
+    private static void SeedRolePermissionData(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<Role>().HasData(
+            new Role { Id = 1, Name = "Nurse", Description = "Frontline clinical staff who submit incident reports", CreatedAt = new DateTime(2026, 1, 1) },
+            new Role { Id = 2, Name = "Physician", Description = "Clinical reviewer who signs off on incident reports", CreatedAt = new DateTime(2026, 1, 1) },
+            new Role { Id = 3, Name = "Admin", Description = "Full administrative access", CreatedAt = new DateTime(2026, 1, 1) },
+            new Role { Id = 4, Name = "Pharmacist", Description = "Pharmacy staff", CreatedAt = new DateTime(2026, 1, 1) }
+        );
+
+        modelBuilder.Entity<SystemModule>().HasData(
+            new SystemModule { Id = 1, Name = "Incident Reports", Description = "Submitting and viewing incident reports", DisplayOrder = 1 },
+            new SystemModule { Id = 2, Name = "Clinical Review", Description = "Reviewing and signing off on reports", DisplayOrder = 2 },
+            new SystemModule { Id = 3, Name = "Alert Rules", Description = "Configuring notification/alert rules", DisplayOrder = 3 },
+            new SystemModule { Id = 4, Name = "Configurations", Description = "Managing dropdown/lookup configuration data", DisplayOrder = 4 },
+            new SystemModule { Id = 5, Name = "User Management", Description = "Managing user accounts and roles", DisplayOrder = 5 },
+            new SystemModule { Id = 6, Name = "Feedback", Description = "Submitting and reviewing app feedback", DisplayOrder = 6 },
+            new SystemModule { Id = 7, Name = "Audit Log", Description = "Viewing the HIPAA audit trail", DisplayOrder = 7 },
+            new SystemModule { Id = 8, Name = "Dashboard", Description = "Viewing analytics dashboard", DisplayOrder = 8 },
+            new SystemModule { Id = 9, Name = "Training & Support", Description = "Viewing training/reference and support resources", DisplayOrder = 9 }
+        );
+
+        modelBuilder.Entity<Permission>().HasData(
+            new Permission { Id = 1, Name = "Incident Reports", PermissionTag = "incident_reports", ParentId = null, SystemModuleId = 1 },
+            new Permission { Id = 2, Name = "Submit Report", PermissionTag = "incident_reports.submit", ParentId = 1, SystemModuleId = 1 },
+            new Permission { Id = 3, Name = "View All Reports", PermissionTag = "incident_reports.view_all", ParentId = 1, SystemModuleId = 1 },
+            new Permission { Id = 4, Name = "Export Reports", PermissionTag = "incident_reports.export", ParentId = 1, SystemModuleId = 1 },
+
+            new Permission { Id = 5, Name = "Clinical Review", PermissionTag = "clinical_review", ParentId = null, SystemModuleId = 2 },
+            new Permission { Id = 6, Name = "Start Review", PermissionTag = "clinical_review.start", ParentId = 5, SystemModuleId = 2 },
+            new Permission { Id = 7, Name = "Sign Off Review", PermissionTag = "clinical_review.sign_off", ParentId = 5, SystemModuleId = 2 },
+
+            new Permission { Id = 8, Name = "Alert Rules", PermissionTag = "alert_rules", ParentId = null, SystemModuleId = 3 },
+            new Permission { Id = 9, Name = "View Alert Rules", PermissionTag = "alert_rules.view", ParentId = 8, SystemModuleId = 3 },
+            new Permission { Id = 10, Name = "Manage Alert Rules", PermissionTag = "alert_rules.manage", ParentId = 8, SystemModuleId = 3 },
+
+            new Permission { Id = 11, Name = "Configurations", PermissionTag = "configurations", ParentId = null, SystemModuleId = 4 },
+            new Permission { Id = 12, Name = "Manage Configurations", PermissionTag = "configurations.manage", ParentId = 11, SystemModuleId = 4 },
+
+            new Permission { Id = 13, Name = "User Management", PermissionTag = "user_management", ParentId = null, SystemModuleId = 5 },
+            new Permission { Id = 14, Name = "Manage Users", PermissionTag = "user_management.manage", ParentId = 13, SystemModuleId = 5 },
+
+            new Permission { Id = 15, Name = "Feedback", PermissionTag = "feedback", ParentId = null, SystemModuleId = 6 },
+            new Permission { Id = 16, Name = "Submit Feedback", PermissionTag = "feedback.submit", ParentId = 15, SystemModuleId = 6 },
+            new Permission { Id = 17, Name = "Review Feedback", PermissionTag = "feedback.review", ParentId = 15, SystemModuleId = 6 },
+
+            new Permission { Id = 18, Name = "Audit Log", PermissionTag = "audit_log", ParentId = null, SystemModuleId = 7 },
+            new Permission { Id = 19, Name = "View Audit Log", PermissionTag = "audit_log.view", ParentId = 18, SystemModuleId = 7 },
+
+            new Permission { Id = 20, Name = "Dashboard", PermissionTag = "dashboard", ParentId = null, SystemModuleId = 8 },
+            new Permission { Id = 21, Name = "View Dashboard", PermissionTag = "dashboard.view", ParentId = 20, SystemModuleId = 8 },
+
+            new Permission { Id = 22, Name = "Training & Support", PermissionTag = "training", ParentId = null, SystemModuleId = 9 },
+            new Permission { Id = 23, Name = "View Training & Support", PermissionTag = "training.view", ParentId = 22, SystemModuleId = 9 }
+        );
+
+        // Admin = every permission. Physician = clinical review + report basics.
+        // Nurse = submit report + feedback + dashboard. Pharmacist = baseline only.
+        // Training & Support (22/23) defaults to every role — it's a help/reference
+        // resource, not a restricted feature. Matches the current frontend
+        // ROLE_PERMISSIONS map plus sensible baseline access.
+        var adminAll = Enumerable.Range(1, 23).Select(pid => new RolePermission { RoleId = 3, PermissionId = pid });
+        var physician = new[] { 1, 3, 5, 6, 7, 20, 21, 22, 23 }.Select(pid => new RolePermission { RoleId = 2, PermissionId = pid });
+        var nurse = new[] { 1, 2, 15, 16, 20, 21, 22, 23 }.Select(pid => new RolePermission { RoleId = 1, PermissionId = pid });
+        var pharmacist = new[] { 1, 2, 20, 21, 22, 23 }.Select(pid => new RolePermission { RoleId = 4, PermissionId = pid });
+
+        modelBuilder.Entity<RolePermission>().HasData(
+            adminAll.Concat(physician).Concat(nurse).Concat(pharmacist).ToArray()
+        );
     }
 }

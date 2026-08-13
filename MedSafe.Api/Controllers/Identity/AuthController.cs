@@ -17,14 +17,24 @@ public class AuthController : ControllerBase
     private readonly JwtService _jwt;
     private readonly IFileService _fileService;
     private readonly AppDbContext _db;
+    private readonly ICurrentUserService _currentUser;
 
-    public AuthController(IUserRepository repo, JwtService jwt, IFileService fileService, AppDbContext db)
+    public AuthController(IUserRepository repo, JwtService jwt, IFileService fileService, AppDbContext db, ICurrentUserService currentUser)
     {
         _repo = repo;
         _jwt = jwt;
         _fileService = fileService;
         _db = db;
+        _currentUser = currentUser;
     }
+
+    private async Task<List<string>> GetPermissionTagsAsync(int? roleId) =>
+        roleId.HasValue
+            ? await _db.RolePermissions
+                .Where(rp => rp.RoleId == roleId)
+                .Join(_db.Permissions, rp => rp.PermissionId, p => p.Id, (rp, p) => p.PermissionTag)
+                .ToListAsync()
+            : new List<string>();
 
     [HttpPost("login")]
     public async Task<IActionResult> Login(LoginDto dto)
@@ -49,6 +59,8 @@ public class AuthController : ControllerBase
         user.FailedAttempts = 0;
         user.LockedUntil = null;
         user.LastLogin = DateTime.UtcNow;
+
+        var permissions = await GetPermissionTagsAsync(user.RoleId);
 
         var token = _jwt.GenerateToken(user);
         var refreshToken = _jwt.GenerateRefreshToken();
@@ -80,8 +92,25 @@ public class AuthController : ControllerBase
             Email = user.Email,
             Unit = user.Unit,
             Title = user.Title,
-            ProfessionId = user.ProfessionId
+            ProfessionId = user.ProfessionId,
+            Permissions = permissions
         });
+    }
+
+    // Lets the frontend pull a fresh permission set for the logged-in user without a
+    // full re-login — needed because an Admin editing a Role's permissions (Roles &
+    // Permissions screen) doesn't retroactively touch tokens already issued to users
+    // holding that Role. Mirrors D:\SystemMonitorControl's GET /api/Permission/getUserPermissions/{UserId},
+    // scoped to "my own permissions" instead of an arbitrary user id.
+    [HttpGet("permissions")]
+    [Authorize]
+    public async Task<IActionResult> GetMyPermissions()
+    {
+        var user = await _db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == _currentUser.UserId);
+        if (user == null) return NotFound();
+
+        var permissions = await GetPermissionTagsAsync(user.RoleId);
+        return Ok(new { permissions });
     }
 
     [HttpPost("refresh")]

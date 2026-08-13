@@ -150,3 +150,23 @@ public sealed class IncidentReportSummaryDto
     public int HarmEvents { get; set; }
     public int ClosedCases { get; set; }
 }
+
+// Same optional filter set as DashboardSummaryRequest, reused here so the Reports
+// Hub can filter server-side the same way the Dashboard does. Every field is
+// optional — an empty/default request (POST {}) returns exactly what the old
+// parameterless GET returned: every report the caller's role can see, no date or
+// classification restriction (unlike Dashboard, there is no "previous week"
+// fallback here — omitting the dates means no date filter at all).
+public sealed class IncidentReportListRequest
+{
+    public string? FacilityUnit { get; set; }
+    public DateTime? StartDate { get; set; }
+    public DateTime? EndDate { get; set; }
+    public string? MedicationName { get; set; }
+    public int? ErrorCategoryId { get; set; }
+    public int? StageOfProcessId { get; set; }
+    public int? PatientOutcomeId { get; set; }
+    public string? SuspectedCausality { get; set; }
+    public int? ContributingFactorId { get; set; }
+    public int? SeriousnessCriterionId { get; set; }
+}

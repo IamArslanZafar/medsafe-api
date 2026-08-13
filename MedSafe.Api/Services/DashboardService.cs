@@ -23,7 +23,7 @@ public class DashboardService : IDashboardService
         _currentUser = currentUser;
     }
 
-    public async Task<DashboardSummaryDto> GetSummaryAsync(string? facilityUnit, DateTime? startDate, DateTime? endDate, CancellationToken cancellationToken)
+    public async Task<DashboardSummaryDto> GetSummaryAsync(DashboardSummaryRequest request, CancellationToken cancellationToken)
     {
         // Previous complete calendar week (last Monday..Sunday, not the current week) —
         // same fallback SystemMonitorControl's sp_GetComputerDailySummaryPagedWithStats
@@ -34,8 +34,8 @@ public class DashboardService : IDashboardService
         var lastWeekMonday = currentWeekMonday.AddDays(-7);
         var lastWeekSunday = currentWeekMonday.AddDays(-1);
 
-        var actualStartDate = (startDate ?? lastWeekMonday).Date;
-        var actualEndDate = (endDate ?? lastWeekSunday).Date;
+        var actualStartDate = (request.StartDate ?? lastWeekMonday).Date;
+        var actualEndDate = (request.EndDate ?? lastWeekSunday).Date;
 
         // Filtered by SubmittedAt (when it was logged into the system), not
         // IncidentOccurredAt (when the incident clinically happened) — a report
@@ -47,11 +47,33 @@ public class DashboardService : IDashboardService
             .Where(r => r.SubmittedAt.Date >= actualStartDate && r.SubmittedAt.Date <= actualEndDate)
             .AsQueryable();
 
-        if (_currentUser.Role == "Nurse")
+        // Only Admin sees every report; every other role is scoped to their own.
+        if (_currentUser.Role != "Admin")
             query = query.Where(r => r.SubmittedByUserId == _currentUser.UserId);
 
-        if (!string.IsNullOrWhiteSpace(facilityUnit) && facilityUnit != "All Units")
-            query = query.Where(r => r.IncidentLocation == facilityUnit);
+        if (!string.IsNullOrWhiteSpace(request.FacilityUnit) && request.FacilityUnit != "All Units")
+            query = query.Where(r => r.IncidentLocation == request.FacilityUnit);
+
+        if (!string.IsNullOrWhiteSpace(request.MedicationName))
+            query = query.Where(r => r.Medications.Any(m => m.MedicationName == request.MedicationName));
+
+        if (request.ErrorCategoryId.HasValue)
+            query = query.Where(r => r.ErrorCategoryId == request.ErrorCategoryId);
+
+        if (request.StageOfProcessId.HasValue)
+            query = query.Where(r => r.StageOfProcessId == request.StageOfProcessId);
+
+        if (request.PatientOutcomeId.HasValue)
+            query = query.Where(r => r.PatientOutcomeId == request.PatientOutcomeId);
+
+        if (!string.IsNullOrWhiteSpace(request.SuspectedCausality))
+            query = query.Where(r => r.SuspectedCausality == request.SuspectedCausality);
+
+        if (request.ContributingFactorId.HasValue)
+            query = query.Where(r => r.ContributingFactors.Any(cf => cf.ContributingFactorId == request.ContributingFactorId));
+
+        if (request.SeriousnessCriterionId.HasValue)
+            query = query.Where(r => r.SeriousnessCriteria.Any(sc => sc.SeriousnessCriterionId == request.SeriousnessCriterionId));
 
         var reports = await query.ToListAsync(cancellationToken);
 

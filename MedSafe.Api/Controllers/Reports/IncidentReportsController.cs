@@ -34,17 +34,20 @@ public class IncidentReportsController : ControllerBase
         return CreatedAtAction(nameof(GetById), new { id = result.Id }, result);
     }
 
-    [HttpGet]
-    public async Task<IActionResult> GetAll(CancellationToken cancellationToken)
+    // POST (not GET) — filters go in the body, same shape/convention as
+    // /api/dashboard/summary. An empty body ({}) returns exactly what the old
+    // parameterless GET returned (role-scoped, no other filtering).
+    [HttpPost("list")]
+    public async Task<IActionResult> GetAll([FromBody] IncidentReportListRequest request, CancellationToken cancellationToken)
     {
-        var reports = await _incidentReportService.GetListAsync(cancellationToken);
+        var reports = await _incidentReportService.GetListAsync(request, cancellationToken);
         return Ok(reports);
     }
 
-    [HttpGet("summary")]
-    public async Task<IActionResult> GetSummary(CancellationToken cancellationToken)
+    [HttpPost("summary")]
+    public async Task<IActionResult> GetSummary([FromBody] IncidentReportListRequest request, CancellationToken cancellationToken)
     {
-        var result = await _incidentReportService.GetSummaryAsync(cancellationToken);
+        var result = await _incidentReportService.GetSummaryAsync(request, cancellationToken);
         return Ok(result);
     }
 
@@ -54,7 +57,9 @@ public class IncidentReportsController : ControllerBase
         var report = await _incidentReportService.GetByIdAsync(id, cancellationToken);
         if (report == null) return NotFound();
 
-        if (_currentUser.Role == "Nurse" && report.SubmittedByUserId != _currentUser.UserId)
+        // Only Admin sees every report; every other role (Nurse, Physician, Pharmacist)
+        // is scoped to reports they submitted themselves.
+        if (_currentUser.Role != "Admin" && report.SubmittedByUserId != _currentUser.UserId)
             return Forbid();
 
         return Ok(report);

@@ -9,6 +9,18 @@ public sealed class DashboardSummaryRequest
     // end of the previous complete calendar week (last Monday..Sunday).
     public DateTime? StartDate { get; set; }
     public DateTime? EndDate { get; set; }
+
+    // All optional — same classification fields used on the Submit form. Each
+    // narrows the same report set the KPIs/breakdown/trend/etc. are computed from.
+    public string? MedicationName { get; set; }
+    public int? ErrorCategoryId { get; set; }
+    public int? StageOfProcessId { get; set; }
+    public int? PatientOutcomeId { get; set; }
+    // WHO-UMC causality scale value (e.g. "probable") — stored as free text on
+    // IncidentReport, not a lookup table FK.
+    public string? SuspectedCausality { get; set; }
+    public int? ContributingFactorId { get; set; }
+    public int? SeriousnessCriterionId { get; set; }
 }
 
 public sealed class DashboardSummaryDto
