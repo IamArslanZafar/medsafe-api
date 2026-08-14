@@ -13,11 +13,19 @@ public class IncidentReportService : IIncidentReportService
 
     private readonly AppDbContext _db;
     private readonly ICurrentUserService _currentUser;
+    private readonly IAlertRuleEvaluationService _alertRuleEvaluationService;
+    private readonly ILogger<IncidentReportService> _logger;
 
-    public IncidentReportService(AppDbContext db, ICurrentUserService currentUser)
+    public IncidentReportService(
+        AppDbContext db,
+        ICurrentUserService currentUser,
+        IAlertRuleEvaluationService alertRuleEvaluationService,
+        ILogger<IncidentReportService> logger)
     {
         _db = db;
         _currentUser = currentUser;
+        _alertRuleEvaluationService = alertRuleEvaluationService;
+        _logger = logger;
     }
 
     public async Task<SubmitIncidentReportResponse> SubmitAsync(SubmitIncidentReportRequest request, CancellationToken cancellationToken)
@@ -50,6 +58,19 @@ public class IncidentReportService : IIncidentReportService
         {
             await transaction.RollbackAsync(cancellationToken);
             throw;
+        }
+
+        // The report is already saved and committed at this point — a failure here
+        // must not turn into a 500 for report submission, so it's caught and logged
+        // rather than rethrown. Runs after commit so a rule-evaluation error can
+        // never roll back a successfully submitted clinical report.
+        try
+        {
+            await _alertRuleEvaluationService.EvaluateIncidentAsync(incident.Id, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Alert rule evaluation failed for incident {IncidentReportId}.", incident.Id);
         }
 
         return new SubmitIncidentReportResponse

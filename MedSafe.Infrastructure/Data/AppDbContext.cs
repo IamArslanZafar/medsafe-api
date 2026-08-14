@@ -11,6 +11,13 @@ public class AppDbContext : DbContext
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
     public DbSet<IncidentReport> IncidentReports => Set<IncidentReport>();
     public DbSet<AlertRule> AlertRules => Set<AlertRule>();
+    public DbSet<AlertRuleMatchMode> AlertRuleMatchModes => Set<AlertRuleMatchMode>();
+    public DbSet<AlertConditionOperator> AlertConditionOperators => Set<AlertConditionOperator>();
+    public DbSet<AlertConditionField> AlertConditionFields => Set<AlertConditionField>();
+    public DbSet<AlertConditionFieldOperator> AlertConditionFieldOperators => Set<AlertConditionFieldOperator>();
+    public DbSet<AlertRuleCondition> AlertRuleConditions => Set<AlertRuleCondition>();
+    public DbSet<AlertRuleConditionValue> AlertRuleConditionValues => Set<AlertRuleConditionValue>();
+    public DbSet<AlertRuleRecipient> AlertRuleRecipients => Set<AlertRuleRecipient>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
     public DbSet<Feedback> Feedbacks => Set<Feedback>();
     public DbSet<DropdownDefinition> DropdownDefinitions => Set<DropdownDefinition>();
@@ -130,6 +137,74 @@ public class AppDbContext : DbContext
             .ToTable("IncidentReportReviews", tb => tb.ExcludeFromMigrations());
         modelBuilder.Entity<IncidentReportStatusHistory>()
             .ToTable("IncidentReportStatusHistory", tb => tb.ExcludeFromMigrations());
+
+        // Alert rule builder tables (and AlertRule's new columns) were added directly
+        // on the live DB via SQL script, same as the IncidentReports rebuild above —
+        // map to them for querying but never let `dotnet ef migrations add` touch them.
+        modelBuilder.Entity<AlertRule>()
+            .ToTable("AlertRules", tb => tb.ExcludeFromMigrations());
+        modelBuilder.Entity<AlertRuleMatchMode>()
+            .ToTable("AlertRuleMatchMode", tb => tb.ExcludeFromMigrations());
+        modelBuilder.Entity<AlertConditionOperator>()
+            .ToTable("AlertConditionOperator", tb => tb.ExcludeFromMigrations());
+        modelBuilder.Entity<AlertConditionField>()
+            .ToTable("AlertConditionField", tb => tb.ExcludeFromMigrations());
+        modelBuilder.Entity<AlertConditionFieldOperator>()
+            .ToTable("AlertConditionFieldOperator", tb => tb.ExcludeFromMigrations());
+        modelBuilder.Entity<AlertRuleCondition>()
+            .ToTable("AlertRuleCondition", tb => tb.ExcludeFromMigrations());
+        modelBuilder.Entity<AlertRuleConditionValue>()
+            .ToTable("AlertRuleConditionValue", tb => tb.ExcludeFromMigrations());
+        modelBuilder.Entity<AlertRuleRecipient>()
+            .ToTable("AlertRuleRecipient", tb => tb.ExcludeFromMigrations());
+
+        modelBuilder.Entity<AlertConditionFieldOperator>()
+            .HasKey(x => new { x.ConditionFieldId, x.OperatorId });
+
+        modelBuilder.Entity<AlertConditionFieldOperator>()
+            .HasOne(x => x.ConditionField)
+            .WithMany(x => x.FieldOperators)
+            .HasForeignKey(x => x.ConditionFieldId);
+
+        modelBuilder.Entity<AlertConditionFieldOperator>()
+            .HasOne(x => x.Operator)
+            .WithMany(x => x.FieldOperators)
+            .HasForeignKey(x => x.OperatorId);
+
+        modelBuilder.Entity<AlertRule>()
+            .HasOne(x => x.MatchMode)
+            .WithMany(x => x.AlertRules)
+            .HasForeignKey(x => x.MatchModeId);
+
+        modelBuilder.Entity<AlertRule>()
+            .HasOne(x => x.NotificationUrgency)
+            .WithMany()
+            .HasForeignKey(x => x.UrgencyId);
+
+        modelBuilder.Entity<AlertRule>()
+            .HasMany(x => x.Conditions)
+            .WithOne(x => x.AlertRule)
+            .HasForeignKey(x => x.AlertRuleId);
+
+        modelBuilder.Entity<AlertRule>()
+            .HasMany(x => x.Recipients)
+            .WithOne(x => x.AlertRule)
+            .HasForeignKey(x => x.AlertRuleId);
+
+        modelBuilder.Entity<AlertRuleCondition>()
+            .HasOne(x => x.ConditionField)
+            .WithMany()
+            .HasForeignKey(x => x.ConditionFieldId);
+
+        modelBuilder.Entity<AlertRuleCondition>()
+            .HasOne(x => x.Operator)
+            .WithMany()
+            .HasForeignKey(x => x.OperatorId);
+
+        modelBuilder.Entity<AlertRuleCondition>()
+            .HasMany(x => x.Values)
+            .WithOne(x => x.AlertRuleCondition)
+            .HasForeignKey(x => x.AlertRuleConditionId);
 
         modelBuilder.Entity<IncidentReport>()
             .HasOne<PatientOutcome>()
@@ -284,6 +359,32 @@ public class AppDbContext : DbContext
             .HasForeignKey(n => n.NotificationTypeId)
             .HasConstraintName("FK_IncidentNotifications_NotificationRecipientType")
             .OnDelete(DeleteBehavior.NoAction);
+
+        // Alert Rule automatic-notification relationships — the DB columns and FKs
+        // were added directly via SQL script, same ExcludeFromMigrations convention.
+        modelBuilder.Entity<IncidentNotification>()
+            .HasOne(n => n.AlertRule)
+            .WithMany()
+            .HasForeignKey(n => n.AlertRuleId)
+            .HasConstraintName("FK_IncidentNotifications_AlertRule")
+            .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<IncidentNotification>()
+            .HasOne(n => n.RecipientUser)
+            .WithMany()
+            .HasForeignKey(n => n.RecipientUserId)
+            .HasConstraintName("FK_IncidentNotifications_RecipientUser")
+            .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<IncidentNotification>()
+            .HasOne(n => n.Urgency)
+            .WithMany()
+            .HasForeignKey(n => n.UrgencyId)
+            .HasConstraintName("FK_IncidentNotifications_Urgency")
+            .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<IncidentNotification>()
+            .HasIndex(n => new { n.RecipientUserId, n.IsRead, n.CreatedDate });
 
         modelBuilder.Entity<IncidentReportReview>()
             .HasOne(r => r.IncidentReport)

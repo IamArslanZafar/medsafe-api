@@ -25,6 +25,9 @@ builder.Services.AddScoped<IIncidentReportService, IncidentReportService>();
 builder.Services.AddScoped<IIncidentAttachmentService, IncidentAttachmentService>();
 builder.Services.AddScoped<IIncidentReportReviewService, IncidentReportReviewService>();
 builder.Services.AddScoped<IDashboardService, DashboardService>();
+builder.Services.AddScoped<IAlertRuleService, AlertRuleService>();
+builder.Services.AddScoped<IAlertRuleEvaluationService, AlertRuleEvaluationService>();
+builder.Services.AddScoped<INotificationService, NotificationService>();
 
 // Repositories
 builder.Services.AddScoped<IUserRepository, UserRepository>();

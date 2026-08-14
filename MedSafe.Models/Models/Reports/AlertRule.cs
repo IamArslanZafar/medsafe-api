@@ -13,4 +13,21 @@ public class AlertRule
     public DateTime? LastTriggered { get; set; }
     public string? DeliveryConfig { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
+    public int? MatchModeId { get; set; }
+    public int? UrgencyId { get; set; }
+    public string? NotificationTitle { get; set; }
+    public string? NotificationMessage { get; set; }
+    public int? CreatedByUserId { get; set; }
+    public int? ModifiedByUserId { get; set; }
+    public DateTime? ModifiedAt { get; set; }
+
+    public bool IsDeleted { get; set; }
+    public DateTime? DeletedAt { get; set; }
+    public int? DeletedByUserId { get; set; }
+
+    public AlertRuleMatchMode? MatchMode { get; set; }
+    public NotificationUrgency? NotificationUrgency { get; set; }
+    public ICollection<AlertRuleCondition> Conditions { get; set; } = new List<AlertRuleCondition>();
+    public ICollection<AlertRuleRecipient> Recipients { get; set; } = new List<AlertRuleRecipient>();
 }
