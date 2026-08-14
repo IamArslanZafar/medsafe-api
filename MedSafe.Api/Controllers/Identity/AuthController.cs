@@ -93,6 +93,7 @@ public class AuthController : ControllerBase
             Unit = user.Unit,
             Title = user.Title,
             ProfessionId = user.ProfessionId,
+            ProfileImage = user.ProfileImage,
             Permissions = permissions
         });
     }

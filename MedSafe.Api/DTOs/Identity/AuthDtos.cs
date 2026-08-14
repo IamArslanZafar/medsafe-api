@@ -38,6 +38,7 @@ public class AuthResponseDto
     public string? Unit { get; set; }
     public string? Title { get; set; }
     public int? ProfessionId { get; set; }
+    public string? ProfileImage { get; set; }
     // Permission tags granted to the user's Role (e.g. "alert_rules.manage") — drives
     // frontend button/section gating so it stays in sync with whatever an Admin configures
     // in Roles & Permissions, instead of a hardcoded per-role map baked into the bundle.
