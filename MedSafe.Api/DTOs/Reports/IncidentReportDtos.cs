@@ -159,6 +159,9 @@ public sealed class IncidentReportSummaryDto
 // fallback here — omitting the dates means no date filter at all).
 public sealed class IncidentReportListRequest
 {
+    // "all" (default/null) | "assigned" (I'm the reviewer) | "submitted" (I submitted it) —
+    // drives the Reports Hub's scope tabs. See IncidentReportService.ApplyScopeFilter.
+    public string? Scope { get; set; }
     public string? FacilityUnit { get; set; }
     public DateTime? StartDate { get; set; }
     public DateTime? EndDate { get; set; }

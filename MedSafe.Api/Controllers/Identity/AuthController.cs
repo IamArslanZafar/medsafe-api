@@ -152,6 +152,90 @@ public class AuthController : ControllerBase
         return Ok(new { message = "Logged out successfully." });
     }
 
+    // Self-service — always keyed off the JWT's own user id, never a client-supplied
+    // one. Name isn't a login credential, so unlike email/password below it doesn't
+    // require re-entering the current password.
+    [HttpPut("change-name")]
+    [Authorize]
+    public async Task<IActionResult> ChangeName(ChangeNameDto dto)
+    {
+        if (string.IsNullOrWhiteSpace(dto.NewName))
+            return BadRequest(new { message = "Name cannot be empty." });
+
+        var user = await _repo.GetByIdAsync(_currentUser.UserId);
+        if (user == null) return NotFound();
+
+        user.Name = dto.NewName.Trim();
+
+        await _repo.AddAuditLogAsync(new AuditLog
+        {
+            UserId = user.Id,
+            UserName = user.Name,
+            Action = "CHANGE_NAME",
+            Details = "User changed their own display name",
+            IpAddress = HttpContext.Connection.RemoteIpAddress?.ToString()
+        });
+
+        await _repo.SaveAsync();
+        return Ok(new { message = "Name updated successfully.", name = user.Name });
+    }
+
+    // Re-verifies the current password so a stolen/left-open session alone isn't
+    // enough to hijack the account's login credentials.
+    [HttpPut("change-email")]
+    [Authorize]
+    public async Task<IActionResult> ChangeEmail(ChangeEmailDto dto)
+    {
+        var user = await _repo.GetByIdAsync(_currentUser.UserId);
+        if (user == null) return NotFound();
+
+        if (!BCrypt.Net.BCrypt.Verify(dto.CurrentPassword, user.PasswordHash))
+            return BadRequest(new { message = "Current password is incorrect." });
+
+        if (!string.Equals(dto.NewEmail, user.Email, StringComparison.OrdinalIgnoreCase) &&
+            await _repo.EmailExistsAsync(dto.NewEmail))
+            return Conflict(new { message = "Email already in use." });
+
+        user.Email = dto.NewEmail;
+
+        await _repo.AddAuditLogAsync(new AuditLog
+        {
+            UserId = user.Id,
+            UserName = user.Name,
+            Action = "CHANGE_EMAIL",
+            Details = "User changed their own email address",
+            IpAddress = HttpContext.Connection.RemoteIpAddress?.ToString()
+        });
+
+        await _repo.SaveAsync();
+        return Ok(new { message = "Email updated successfully.", email = user.Email });
+    }
+
+    [HttpPut("change-password")]
+    [Authorize]
+    public async Task<IActionResult> ChangePassword(ChangePasswordDto dto)
+    {
+        var user = await _repo.GetByIdAsync(_currentUser.UserId);
+        if (user == null) return NotFound();
+
+        if (!BCrypt.Net.BCrypt.Verify(dto.CurrentPassword, user.PasswordHash))
+            return BadRequest(new { message = "Current password is incorrect." });
+
+        user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.NewPassword);
+
+        await _repo.AddAuditLogAsync(new AuditLog
+        {
+            UserId = user.Id,
+            UserName = user.Name,
+            Action = "CHANGE_PASSWORD",
+            Details = "User changed their own password",
+            IpAddress = HttpContext.Connection.RemoteIpAddress?.ToString()
+        });
+
+        await _repo.SaveAsync();
+        return Ok(new { message = "Password updated successfully." });
+    }
+
     [HttpPost("register")]
     [Authorize(Roles = "Admin")]
     public async Task<IActionResult> Register([FromForm] RegisterDto dto)
@@ -162,6 +246,10 @@ public class AuthController : ControllerBase
         if (dto.ProfessionId.HasValue &&
             !await _db.Professions.AnyAsync(p => p.Id == dto.ProfessionId && p.IsActive))
             return BadRequest(new { message = "Invalid profession" });
+
+        if (dto.PositionId.HasValue &&
+            !await _db.Positions.AnyAsync(p => p.Id == dto.PositionId && p.ProfessionId == dto.ProfessionId && p.IsActive))
+            return BadRequest(new { message = "Invalid position for the selected profession" });
 
         string? profileImagePath = null;
         if (dto.ProfileImage != null)
@@ -176,6 +264,7 @@ public class AuthController : ControllerBase
             Unit = dto.Unit,
             Title = dto.Title,
             ProfessionId = dto.ProfessionId,
+            PositionId = dto.PositionId,
             ProfileImage = profileImagePath
         };
 

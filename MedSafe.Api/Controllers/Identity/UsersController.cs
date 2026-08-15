@@ -27,6 +27,9 @@ public class UsersController : ControllerBase
     public async Task<IActionResult> GetUsers()
     {
         var users = await _repo.GetAllAsync();
+        var professionNames = await _db.Professions.ToDictionaryAsync(p => p.Id, p => p.Name);
+        var positionNames = await _db.Positions.ToDictionaryAsync(p => p.Id, p => p.Name);
+
         return Ok(users.Select(u => new UserResponseDto
         {
             Id = u.Id,
@@ -37,6 +40,9 @@ public class UsersController : ControllerBase
             Unit = u.Unit,
             Title = u.Title,
             ProfessionId = u.ProfessionId,
+            ProfessionName = u.ProfessionId.HasValue ? professionNames.GetValueOrDefault(u.ProfessionId.Value) : null,
+            PositionId = u.PositionId,
+            PositionName = u.PositionId.HasValue ? positionNames.GetValueOrDefault(u.PositionId.Value) : null,
             Status = u.Status,
             LastLogin = u.LastLogin,
             CreatedAt = u.CreatedAt,
@@ -91,5 +97,34 @@ public class UsersController : ControllerBase
 
         await _repo.SaveAsync();
         return Ok(new { message = $"Role updated to {role.Name}" });
+    }
+
+    [HttpPut("{id}/profession")]
+    public async Task<IActionResult> UpdateProfession(int id, UpdateUserProfessionDto dto)
+    {
+        var user = await _repo.GetByIdAsync(id);
+        if (user == null) return NotFound();
+
+        if (dto.ProfessionId.HasValue &&
+            !await _db.Professions.AnyAsync(p => p.Id == dto.ProfessionId && p.IsActive))
+            return BadRequest(new { message = "Invalid profession" });
+
+        if (dto.PositionId.HasValue &&
+            !await _db.Positions.AnyAsync(p => p.Id == dto.PositionId && p.ProfessionId == dto.ProfessionId && p.IsActive))
+            return BadRequest(new { message = "Invalid position for the selected profession" });
+
+        user.ProfessionId = dto.ProfessionId;
+        user.PositionId = dto.PositionId;
+
+        await _repo.AddAuditLogAsync(new AuditLog
+        {
+            UserName = User.FindFirst(ClaimTypes.Name)!.Value,
+            Action = "UPDATE_USER_PROFESSION",
+            Details = $"User {user.Email} profession/position updated (ProfessionId={dto.ProfessionId}, PositionId={dto.PositionId})",
+            IpAddress = HttpContext.Connection.RemoteIpAddress?.ToString()
+        });
+
+        await _repo.SaveAsync();
+        return Ok(new { message = "Profession/position updated" });
     }
 }

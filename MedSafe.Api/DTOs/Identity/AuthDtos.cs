@@ -20,12 +20,30 @@ public class RegisterDto
     public string? Unit { get; set; }
     public string? Title { get; set; }
     public int? ProfessionId { get; set; }
+    public int? PositionId { get; set; }
     public IFormFile? ProfileImage { get; set; }
 }
 
 public class RefreshTokenDto
 {
     [Required] public string RefreshToken { get; set; } = string.Empty;
+}
+
+public class ChangeNameDto
+{
+    [Required] public string NewName { get; set; } = string.Empty;
+}
+
+public class ChangeEmailDto
+{
+    [Required, EmailAddress] public string NewEmail { get; set; } = string.Empty;
+    [Required] public string CurrentPassword { get; set; } = string.Empty;
+}
+
+public class ChangePasswordDto
+{
+    [Required] public string CurrentPassword { get; set; } = string.Empty;
+    [Required, MinLength(8)] public string NewPassword { get; set; } = string.Empty;
 }
 
 public class AuthResponseDto

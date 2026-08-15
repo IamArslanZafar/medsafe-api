@@ -72,6 +72,17 @@ public class AppDbContext : DbContext
             .HasConstraintName("FK_Position_Profession")
             .OnDelete(DeleteBehavior.NoAction);
 
+        // Composite FK mirrors the same pattern used below for IncidentReport —
+        // ties PositionId to the Position that actually belongs to the user's
+        // ProfessionId, instead of allowing a mismatched profession/position pair.
+        modelBuilder.Entity<User>()
+            .HasOne<Position>()
+            .WithMany()
+            .HasForeignKey(u => new { u.ProfessionId, u.PositionId })
+            .HasPrincipalKey(p => new { p.ProfessionId, p.Id })
+            .HasConstraintName("FK_Users_ProfessionPosition")
+            .OnDelete(DeleteBehavior.NoAction);
+
         modelBuilder.Entity<Position>()
             .HasIndex(p => new { p.ProfessionId, p.Name })
             .IsUnique()

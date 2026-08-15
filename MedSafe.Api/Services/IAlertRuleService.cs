@@ -9,4 +9,7 @@ public interface IAlertRuleService
     Task<AlertRuleDetailDto?> GetByIdAsync(int id, CancellationToken cancellationToken);
     Task<UpdateAlertRuleResponse> UpdateAsync(int id, UpdateAlertRuleRequest request, CancellationToken cancellationToken);
     Task<AlertRuleSummaryDto> GetSummaryAsync(CancellationToken cancellationToken);
+    // Shared with DashboardService so both summary endpoints report the exact
+    // same per-field rule counts from one query implementation.
+    Task<List<AlertRuleFieldUsageDto>> GetFieldUsageAsync(CancellationToken cancellationToken);
 }

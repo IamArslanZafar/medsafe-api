@@ -37,6 +37,10 @@ public sealed class DashboardSummaryDto
     public List<DashboardNamedCountDto> Severity { get; set; } = new();
     public List<DashboardNamedCountDto> TopMedications { get; set; } = new();
     public List<DashboardNamedCountDto> ErrorTypesByNature { get; set; } = new();
+    // Alert Rule condition-field usage — how many configured (non-deleted) rules
+    // use each supported field at least once. Rule configuration data, not scoped
+    // to this request's date/unit/report filters (see AlertRuleFieldUsageDto).
+    public List<AlertRuleFieldUsageDto> FieldUsage { get; set; } = new();
 }
 
 public sealed class DashboardBreakdownDto

@@ -211,4 +211,15 @@ public sealed class AlertRuleSummaryDto
     public int InactiveRules { get; set; }
     public int CriticalRules { get; set; }
     public int AlertsTriggeredLast24Hours { get; set; }
+    // Per-builder-field breakdown — how many (non-deleted) rules use each
+    // supported condition field at least once. Powers the expanded KPI view.
+    public List<AlertRuleFieldUsageDto> FieldUsage { get; set; } = [];
+}
+
+public sealed class AlertRuleFieldUsageDto
+{
+    public int FieldId { get; set; }
+    public string FieldCode { get; set; } = string.Empty;
+    public string FieldName { get; set; } = string.Empty;
+    public int RuleCount { get; set; }
 }

@@ -12,6 +12,9 @@ public class UserResponseDto
     public string? Unit { get; set; }
     public string? Title { get; set; }
     public int? ProfessionId { get; set; }
+    public string? ProfessionName { get; set; }
+    public int? PositionId { get; set; }
+    public string? PositionName { get; set; }
     public string Status { get; set; } = string.Empty;
     public DateTime? LastLogin { get; set; }
     public DateTime CreatedAt { get; set; }
@@ -26,4 +29,10 @@ public class UpdateUserStatusDto
 public class UpdateUserRoleDto
 {
     [Required] public int RoleId { get; set; }
+}
+
+public class UpdateUserProfessionDto
+{
+    public int? ProfessionId { get; set; }
+    public int? PositionId { get; set; }
 }

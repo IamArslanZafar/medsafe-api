@@ -14,6 +14,7 @@ public class User
     public string? Unit { get; set; }
     public string? Title { get; set; }
     public int? ProfessionId { get; set; }
+    public int? PositionId { get; set; }
     public string Status { get; set; } = "active";
     public int FailedAttempts { get; set; } = 0;
     public DateTime? LockedUntil { get; set; }

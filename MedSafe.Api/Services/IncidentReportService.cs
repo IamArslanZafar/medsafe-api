@@ -98,6 +98,27 @@ public class IncidentReportService : IIncidentReportService
         return report == null ? null : MapToDto(report);
     }
 
+    public async Task<bool> CanCurrentUserAccessAsync(int incidentReportId, CancellationToken cancellationToken)
+    {
+        if (_currentUser.Role == "Admin")
+            return true;
+
+        var userId = _currentUser.UserId;
+
+        var isSubmitter = await _db.IncidentReports
+            .AnyAsync(r => r.Id == incidentReportId && r.SubmittedByUserId == userId, cancellationToken);
+        if (isSubmitter)
+            return true;
+
+        var isNotificationRecipient = await _db.IncidentNotifications
+            .AnyAsync(n => n.IncidentReportId == incidentReportId && n.RecipientUserId == userId, cancellationToken);
+        if (isNotificationRecipient)
+            return true;
+
+        return await _db.IncidentReportReviews
+            .AnyAsync(r => r.IncidentReportId == incidentReportId && r.ReviewerUserId == userId, cancellationToken);
+    }
+
     public async Task<List<IncidentReportDto>> GetListAsync(IncidentReportListRequest request, CancellationToken cancellationToken)
     {
         var query = ApplyFilters(_db.IncidentReports.AsQueryable(), request);
@@ -136,15 +157,43 @@ public class IncidentReportService : IIncidentReportService
         return summary ?? new IncidentReportSummaryDto();
     }
 
-    // Shared by GetListAsync/GetSummaryAsync so both stay in sync. Only Admin sees
-    // every report — every other role (Nurse, Physician, Pharmacist) is scoped to
-    // reports they submitted themselves. Note: this means Physician can no longer
-    // see Nurse-submitted reports to review/sign off on — an explicit, confirmed
-    // tradeoff, not an oversight.
+    // Powers the Reports Hub's scope tabs. "assigned"/"submitted" are deliberately
+    // narrow (reviewer-of-record / submitter only) so each tab means exactly what it
+    // says; "all" (and no scope, for backward compatibility) is the broad view —
+    // Admin sees every report, everyone else sees their own plus anything they were
+    // notified about or are the assigned reviewer for.
+    private IQueryable<IncidentReport> ApplyScopeFilter(IQueryable<IncidentReport> query, string? scope)
+    {
+        var userId = _currentUser.UserId;
+
+        switch (scope?.Trim().ToLowerInvariant())
+        {
+            case "assigned":
+                query = query.Where(r => r.Review != null && r.Review.ReviewerUserId == userId);
+                break;
+
+            case "submitted":
+                query = query.Where(r => r.SubmittedByUserId == userId);
+                break;
+
+            default:
+                if (_currentUser.Role != "Admin")
+                {
+                    query = query.Where(r =>
+                        r.SubmittedByUserId == userId ||
+                        (r.Review != null && r.Review.ReviewerUserId == userId) ||
+                        r.Notifications.Any(n => n.RecipientUserId == userId));
+                }
+                break;
+        }
+
+        return query;
+    }
+
+    // Shared by GetListAsync/GetSummaryAsync so both stay in sync.
     private IQueryable<IncidentReport> ApplyFilters(IQueryable<IncidentReport> query, IncidentReportListRequest request)
     {
-        if (_currentUser.Role != "Admin")
-            query = query.Where(r => r.SubmittedByUserId == _currentUser.UserId);
+        query = ApplyScopeFilter(query, request.Scope);
 
         if (request.StartDate.HasValue && request.EndDate.HasValue)
         {

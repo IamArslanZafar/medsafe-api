@@ -6,6 +6,7 @@ using MedSafe.Infrastructure.Data;
 using MedSafe.Infrastructure.Interfaces;
 using MedSafe.Infrastructure.Repository;
 using MedSafe.Logging.MiddleWares;
+using MedSafeAPI.BackgroundServices;
 using MedSafeAPI.Filter;
 using MedSafeAPI.Services;
 
@@ -28,6 +29,7 @@ builder.Services.AddScoped<IDashboardService, DashboardService>();
 builder.Services.AddScoped<IAlertRuleService, AlertRuleService>();
 builder.Services.AddScoped<IAlertRuleEvaluationService, AlertRuleEvaluationService>();
 builder.Services.AddScoped<INotificationService, NotificationService>();
+builder.Services.AddHostedService<AlertMonitorService>();
 
 // Repositories
 builder.Services.AddScoped<IUserRepository, UserRepository>();

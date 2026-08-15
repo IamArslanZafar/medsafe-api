@@ -304,8 +304,28 @@ public class AlertRuleService : IAlertRuleService
             ActiveRules = activeRules,
             InactiveRules = totalRules - activeRules,
             CriticalRules = criticalRules,
-            AlertsTriggeredLast24Hours = triggeredLast24h
+            AlertsTriggeredLast24Hours = triggeredLast24h,
+            FieldUsage = await GetFieldUsageAsync(cancellationToken)
         };
+    }
+
+    public async Task<List<AlertRuleFieldUsageDto>> GetFieldUsageAsync(CancellationToken cancellationToken)
+    {
+        return await _db.AlertConditionFields
+            .Where(f => f.IsActive)
+            .OrderBy(f => f.DisplayOrder)
+            .Select(f => new AlertRuleFieldUsageDto
+            {
+                FieldId = f.Id,
+                FieldCode = f.Code,
+                FieldName = f.Name,
+                RuleCount = _db.AlertRuleConditions
+                    .Where(c => c.ConditionFieldId == f.Id && !c.AlertRule.IsDeleted)
+                    .Select(c => c.AlertRuleId)
+                    .Distinct()
+                    .Count()
+            })
+            .ToListAsync(cancellationToken);
     }
 
     private async Task InsertConditionsAsync(int alertRuleId, List<CreateAlertRuleConditionRequest> conditions, CancellationToken cancellationToken)

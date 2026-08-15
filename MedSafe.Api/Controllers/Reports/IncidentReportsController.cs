@@ -13,18 +13,15 @@ public class IncidentReportsController : ControllerBase
     private readonly IIncidentReportService _incidentReportService;
     private readonly IIncidentAttachmentService _attachmentService;
     private readonly IIncidentReportReviewService _reviewService;
-    private readonly ICurrentUserService _currentUser;
 
     public IncidentReportsController(
         IIncidentReportService incidentReportService,
         IIncidentAttachmentService attachmentService,
-        IIncidentReportReviewService reviewService,
-        ICurrentUserService currentUser)
+        IIncidentReportReviewService reviewService)
     {
         _incidentReportService = incidentReportService;
         _attachmentService = attachmentService;
         _reviewService = reviewService;
-        _currentUser = currentUser;
     }
 
     [HttpPost]
@@ -54,13 +51,13 @@ public class IncidentReportsController : ControllerBase
     [HttpGet("{id:int}")]
     public async Task<IActionResult> GetById(int id, CancellationToken cancellationToken)
     {
+        // Admin, the submitter, anyone the report notified, and the assigned reviewer
+        // can view it — otherwise a report a user was notified to act on would 403.
+        if (!await _incidentReportService.CanCurrentUserAccessAsync(id, cancellationToken))
+            return Forbid();
+
         var report = await _incidentReportService.GetByIdAsync(id, cancellationToken);
         if (report == null) return NotFound();
-
-        // Only Admin sees every report; every other role (Nurse, Physician, Pharmacist)
-        // is scoped to reports they submitted themselves.
-        if (_currentUser.Role != "Admin" && report.SubmittedByUserId != _currentUser.UserId)
-            return Forbid();
 
         return Ok(report);
     }
@@ -69,6 +66,9 @@ public class IncidentReportsController : ControllerBase
     [RequestSizeLimit(10 * 1024 * 1024)]
     public async Task<IActionResult> UploadAttachment(int incidentReportId, IFormFile file, CancellationToken cancellationToken)
     {
+        if (!await _incidentReportService.CanCurrentUserAccessAsync(incidentReportId, cancellationToken))
+            return Forbid();
+
         var result = await _attachmentService.UploadAsync(incidentReportId, file, cancellationToken);
         return Ok(result);
     }
@@ -76,6 +76,9 @@ public class IncidentReportsController : ControllerBase
     [HttpGet("{incidentReportId:int}/attachments/{attachmentId:int}/download")]
     public async Task<IActionResult> DownloadAttachment(int incidentReportId, int attachmentId, CancellationToken cancellationToken)
     {
+        if (!await _incidentReportService.CanCurrentUserAccessAsync(incidentReportId, cancellationToken))
+            return Forbid();
+
         var (stream, contentType, fileName) = await _attachmentService.DownloadAsync(incidentReportId, attachmentId, cancellationToken);
         return File(stream, contentType, fileName);
     }
@@ -84,6 +87,9 @@ public class IncidentReportsController : ControllerBase
     [Authorize(Roles = "Physician,Admin")]
     public async Task<IActionResult> StartReview(int id, CancellationToken cancellationToken)
     {
+        if (!await _incidentReportService.CanCurrentUserAccessAsync(id, cancellationToken))
+            return Forbid();
+
         var result = await _reviewService.StartReviewAsync(id, cancellationToken);
         return Ok(result);
     }
@@ -92,6 +98,9 @@ public class IncidentReportsController : ControllerBase
     [Authorize(Roles = "Physician,Admin")]
     public async Task<IActionResult> SignOffReview(int id, [FromBody] SignOffReviewRequest request, CancellationToken cancellationToken)
     {
+        if (!await _incidentReportService.CanCurrentUserAccessAsync(id, cancellationToken))
+            return Forbid();
+
         var result = await _reviewService.SignOffReviewAsync(id, request, cancellationToken);
         return Ok(result);
     }
@@ -99,6 +108,9 @@ public class IncidentReportsController : ControllerBase
     [HttpGet("{id:int}/review")]
     public async Task<IActionResult> GetReview(int id, CancellationToken cancellationToken)
     {
+        if (!await _incidentReportService.CanCurrentUserAccessAsync(id, cancellationToken))
+            return Forbid();
+
         var review = await _reviewService.GetReviewAsync(id, cancellationToken);
         if (review == null) return NotFound();
         return Ok(review);

@@ -16,11 +16,13 @@ public class DashboardService : IDashboardService
 
     private readonly AppDbContext _db;
     private readonly ICurrentUserService _currentUser;
+    private readonly IAlertRuleService _alertRuleService;
 
-    public DashboardService(AppDbContext db, ICurrentUserService currentUser)
+    public DashboardService(AppDbContext db, ICurrentUserService currentUser, IAlertRuleService alertRuleService)
     {
         _db = db;
         _currentUser = currentUser;
+        _alertRuleService = alertRuleService;
     }
 
     public async Task<DashboardSummaryDto> GetSummaryAsync(DashboardSummaryRequest request, CancellationToken cancellationToken)
@@ -121,6 +123,8 @@ public class DashboardService : IDashboardService
             .Take(6)
             .ToList();
 
+        var fieldUsage = await _alertRuleService.GetFieldUsageAsync(cancellationToken);
+
         var dayCount = (actualEndDate - actualStartDate).Days + 1;
         var days = Enumerable.Range(0, dayCount).Select(i => actualStartDate.AddDays(i)).ToList();
         var trend = new DashboardTrendDto
@@ -152,6 +156,7 @@ public class DashboardService : IDashboardService
             Severity = SeverityCodes.Select(c => new DashboardNamedCountDto { Name = c, Count = severityLookup[c] }).ToList(),
             TopMedications = topMedications,
             ErrorTypesByNature = errorTypes,
+            FieldUsage = fieldUsage,
         };
     }
 }
