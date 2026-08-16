@@ -112,7 +112,7 @@ public class DashboardService : IDashboardService
             .GroupBy(m => m.MedicationName)
             .Select(g => new DashboardNamedCountDto { Name = g.Key, Count = g.Count() })
             .OrderByDescending(x => x.Count)
-            .Take(5)
+            .Take(10)
             .ToList();
 
         var errorTypes = reports
@@ -123,7 +123,7 @@ public class DashboardService : IDashboardService
             .Take(6)
             .ToList();
 
-        var fieldUsage = await _alertRuleService.GetFieldUsageAsync(cancellationToken);
+        var alertRuleSummary = await _alertRuleService.GetSummaryAsync(cancellationToken);
 
         var dayCount = (actualEndDate - actualStartDate).Days + 1;
         var days = Enumerable.Range(0, dayCount).Select(i => actualStartDate.AddDays(i)).ToList();
@@ -156,7 +156,11 @@ public class DashboardService : IDashboardService
             Severity = SeverityCodes.Select(c => new DashboardNamedCountDto { Name = c, Count = severityLookup[c] }).ToList(),
             TopMedications = topMedications,
             ErrorTypesByNature = errorTypes,
-            FieldUsage = fieldUsage,
+            FieldUsage = alertRuleSummary.FieldUsage,
+            TotalAlertRules = alertRuleSummary.TotalRules,
+            ActiveAlertRules = alertRuleSummary.ActiveRules,
+            CriticalAlertRules = alertRuleSummary.CriticalRules,
+            AlertsTriggeredLast24Hours = alertRuleSummary.AlertsTriggeredLast24Hours,
         };
     }
 }

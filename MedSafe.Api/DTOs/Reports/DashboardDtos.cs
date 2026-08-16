@@ -41,6 +41,13 @@ public sealed class DashboardSummaryDto
     // use each supported field at least once. Rule configuration data, not scoped
     // to this request's date/unit/report filters (see AlertRuleFieldUsageDto).
     public List<AlertRuleFieldUsageDto> FieldUsage { get; set; } = new();
+    // Alert Rule status counts — same rule-configuration data as FieldUsage above
+    // (not scoped to this request's date/unit/report filters). Powers the "Report
+    // Breakdown" card's Alert Rules view on the dashboard.
+    public int TotalAlertRules { get; set; }
+    public int ActiveAlertRules { get; set; }
+    public int CriticalAlertRules { get; set; }
+    public int AlertsTriggeredLast24Hours { get; set; }
 }
 
 public sealed class DashboardBreakdownDto

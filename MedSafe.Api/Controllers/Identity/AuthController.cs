@@ -36,6 +36,16 @@ public class AuthController : ControllerBase
                 .ToListAsync()
             : new List<string>();
 
+    // Public (unauthenticated) — powers the "N Reports Today" badge on the Login
+    // screen, which renders before any JWT exists.
+    [HttpGet("public-stats")]
+    public async Task<IActionResult> GetPublicStats()
+    {
+        var today = DateTime.UtcNow.Date;
+        var reportsToday = await _db.IncidentReports.CountAsync(r => r.SubmittedAt.Date == today);
+        return Ok(new { reportsToday });
+    }
+
     [HttpPost("login")]
     public async Task<IActionResult> Login(LoginDto dto)
     {
