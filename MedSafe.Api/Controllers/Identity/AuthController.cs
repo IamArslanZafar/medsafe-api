@@ -282,6 +282,51 @@ public class AuthController : ControllerBase
         return Ok(new { message = "Password updated successfully." });
     }
 
+    // Self-service — same shape as UsersController's Admin-only availability
+    // endpoints, but always scoped to the caller's own JWT user id rather than a
+    // client-supplied one.
+    [HttpGet("my-availability")]
+    [Authorize]
+    public async Task<IActionResult> GetMyAvailability()
+    {
+        var rows = await _db.UserAvailabilities
+            .AsNoTracking()
+            .Where(a => a.UserId == _currentUser.UserId)
+            .OrderBy(a => a.DayOfWeek)
+            .ToListAsync();
+
+        return Ok(rows.Select(AvailabilityHelper.ToDto));
+    }
+
+    // Replace-all semantics, same as the Admin endpoint — the frontend resends the
+    // complete current weekly schedule each save.
+    [HttpPut("my-availability")]
+    [Authorize]
+    public async Task<IActionResult> UpdateMyAvailability(UpdateUserAvailabilityDto dto)
+    {
+        var user = await _repo.GetByIdAsync(_currentUser.UserId);
+        if (user == null) return NotFound();
+
+        var error = AvailabilityHelper.Validate(dto.Availability);
+        if (error != null) return BadRequest(new { message = error });
+
+        var existing = await _db.UserAvailabilities.Where(a => a.UserId == _currentUser.UserId).ToListAsync();
+        _db.UserAvailabilities.RemoveRange(existing);
+        _db.UserAvailabilities.AddRange(AvailabilityHelper.BuildEntities(_currentUser.UserId, dto.Availability));
+
+        await _repo.AddAuditLogAsync(new AuditLog
+        {
+            UserId = user.Id,
+            UserName = user.Name,
+            Action = "CHANGE_AVAILABILITY",
+            Details = "User changed their own weekly availability",
+            IpAddress = HttpContext.Connection.RemoteIpAddress?.ToString()
+        });
+
+        await _repo.SaveAsync();
+        return Ok(new { message = "Availability updated successfully.", availabilityDays = dto.Availability.Count });
+    }
+
     [HttpPost("register")]
     [Authorize(Roles = "Admin")]
     public async Task<IActionResult> Register([FromForm] RegisterDto dto)
