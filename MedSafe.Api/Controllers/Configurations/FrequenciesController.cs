@@ -35,8 +35,10 @@ public class FrequenciesController : ControllerBase
         return Ok(MapToDto(frequency));
     }
 
+    // Open to any logged-in role — the incident report form's medication fields
+    // let a user add a new Frequency inline while filling out a report.
+    // Update/Delete stay Admin-only.
     [HttpPost]
-    [Authorize(Roles = "Admin")]
     public async Task<IActionResult> Create(FrequencyUpsertDto dto)
     {
         if (await _db.Frequencies.AnyAsync(f => f.Name == dto.Name))

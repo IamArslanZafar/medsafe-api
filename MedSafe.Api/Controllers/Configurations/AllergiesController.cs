@@ -40,8 +40,11 @@ public class AllergiesController : ControllerBase
         return Ok(MapToDto(item));
     }
 
+    // Open to any logged-in role (not just Admin) — the incident report form's
+    // "Known Patient Allergies" field (mode="tags") calls this so a nurse/physician
+    // can add a new allergen inline while filling out a report, same as an Admin
+    // adding one from Configurations. Update/Delete stay Admin-only.
     [HttpPost]
-    [Authorize(Roles = "Admin")]
     public async Task<IActionResult> Create(AllergyUpsertDto dto)
     {
         if (await _db.Allergies.AnyAsync(a => a.Name == dto.Name))

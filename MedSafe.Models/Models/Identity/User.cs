@@ -13,6 +13,8 @@ public class User
     public int? RoleId { get; set; }
     public string? Unit { get; set; }
     public string? Title { get; set; }
+    public string? PhoneNumber { get; set; }
+    public string? Shift { get; set; }
     public int? ProfessionId { get; set; }
     public int? PositionId { get; set; }
     public string Status { get; set; } = "active";

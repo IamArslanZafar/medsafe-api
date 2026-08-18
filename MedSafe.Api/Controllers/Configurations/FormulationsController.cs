@@ -35,8 +35,10 @@ public class FormulationsController : ControllerBase
         return Ok(MapToDto(formulation));
     }
 
+    // Open to any logged-in role — the incident report form's medication fields
+    // let a user add a new Formulation inline while filling out a report.
+    // Update/Delete stay Admin-only.
     [HttpPost]
-    [Authorize(Roles = "Admin")]
     public async Task<IActionResult> Create(FormulationUpsertDto dto)
     {
         if (await _db.Formulations.AnyAsync(f => f.Name == dto.Name))

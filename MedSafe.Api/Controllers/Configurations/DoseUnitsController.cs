@@ -35,8 +35,10 @@ public class DoseUnitsController : ControllerBase
         return Ok(MapToDto(unit));
     }
 
+    // Open to any logged-in role — the incident report form's medication fields
+    // let a user add a new Dose Unit inline while filling out a report.
+    // Update/Delete stay Admin-only.
     [HttpPost]
-    [Authorize(Roles = "Admin")]
     public async Task<IActionResult> Create(DoseUnitUpsertDto dto)
     {
         if (await _db.DoseUnits.AnyAsync(u => u.Name == dto.Name))

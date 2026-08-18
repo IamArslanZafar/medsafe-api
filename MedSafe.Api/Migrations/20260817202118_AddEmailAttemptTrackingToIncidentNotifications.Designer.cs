@@ -4,6 +4,7 @@ using MedSafe.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace MedSafeAPI.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260817202118_AddEmailAttemptTrackingToIncidentNotifications")]
+    partial class AddEmailAttemptTrackingToIncidentNotifications
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -2527,34 +2530,6 @@ namespace MedSafeAPI.Migrations
                     b.ToTable("Users");
                 });
 
-            modelBuilder.Entity("MedSafe.Models.UserAvailability", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<int>("DayOfWeek")
-                        .HasColumnType("int");
-
-                    b.Property<TimeOnly>("EndTime")
-                        .HasColumnType("time");
-
-                    b.Property<TimeOnly>("StartTime")
-                        .HasColumnType("time");
-
-                    b.Property<int>("UserId")
-                        .HasColumnType("int");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("UserId", "DayOfWeek")
-                        .IsUnique();
-
-                    b.ToTable("UserAvailabilities");
-                });
-
             modelBuilder.Entity("MedSafe.Models.AlertConditionFieldOperator", b =>
                 {
                     b.HasOne("MedSafe.Models.AlertConditionField", "ConditionField")
@@ -2994,17 +2969,6 @@ namespace MedSafeAPI.Migrations
                         .HasPrincipalKey("ProfessionId", "Id")
                         .OnDelete(DeleteBehavior.NoAction)
                         .HasConstraintName("FK_Users_ProfessionPosition");
-                });
-
-            modelBuilder.Entity("MedSafe.Models.UserAvailability", b =>
-                {
-                    b.HasOne("MedSafe.Models.User", "User")
-                        .WithMany()
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("MedSafe.Models.AlertConditionField", b =>

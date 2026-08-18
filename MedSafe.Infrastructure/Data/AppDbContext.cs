@@ -9,6 +9,7 @@ public class AppDbContext : DbContext
 
     public DbSet<User> Users => Set<User>();
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
+    public DbSet<UserAvailability> UserAvailabilities => Set<UserAvailability>();
     public DbSet<IncidentReport> IncidentReports => Set<IncidentReport>();
     public DbSet<AlertRule> AlertRules => Set<AlertRule>();
     public DbSet<AlertRuleMatchMode> AlertRuleMatchModes => Set<AlertRuleMatchMode>();
@@ -395,6 +396,13 @@ public class AppDbContext : DbContext
             .OnDelete(DeleteBehavior.NoAction);
 
         modelBuilder.Entity<IncidentNotification>()
+            .HasOne(n => n.NotificationMethod)
+            .WithMany()
+            .HasForeignKey(n => n.NotificationMethodId)
+            .HasConstraintName("FK_IncidentNotifications_NotificationMethod")
+            .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<IncidentNotification>()
             .HasIndex(n => new { n.RecipientUserId, n.IsRead, n.CreatedDate });
 
         modelBuilder.Entity<IncidentReportReview>()
@@ -449,6 +457,15 @@ public class AppDbContext : DbContext
             .WithMany(u => u.RefreshTokens)
             .HasForeignKey(r => r.UserId);
 
+        modelBuilder.Entity<UserAvailability>()
+            .HasOne(a => a.User)
+            .WithMany()
+            .HasForeignKey(a => a.UserId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<UserAvailability>()
+            .HasIndex(a => new { a.UserId, a.DayOfWeek }).IsUnique();
+
         modelBuilder.Entity<AuditLog>()
             .HasOne(a => a.User)
             .WithMany()
@@ -501,6 +518,8 @@ public class AppDbContext : DbContext
         modelBuilder.Entity<IncidentNotification>(entity =>
         {
             entity.Property(e => e.PersonName).HasMaxLength(200);
+            entity.Property(e => e.Status).HasMaxLength(50);
+            entity.Property(e => e.Notes).HasMaxLength(1000);
         });
 
         modelBuilder.Entity<NotificationRecipientType>(entity =>

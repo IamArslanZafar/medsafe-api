@@ -22,8 +22,17 @@ public class IncidentNotification
     public bool IsRead { get; set; }
     public DateTime? ReadAt { get; set; }
 
+    // ── Email delivery fields ──
+    public int? NotificationMethodId { get; set; }
+    public string? Status { get; set; }
+    public DateTime? SentAt { get; set; }
+    public string? Notes { get; set; }
+    public int EmailAttemptCount { get; set; }
+    public DateTime? LastEmailAttemptAt { get; set; }
+
     public IncidentReport IncidentReport { get; set; } = null!;
     public AlertRule? AlertRule { get; set; }
     public User? RecipientUser { get; set; }
     public NotificationUrgency? Urgency { get; set; }
+    public NotificationMethod? NotificationMethod { get; set; }
 }

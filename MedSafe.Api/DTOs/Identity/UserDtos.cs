@@ -11,6 +11,8 @@ public class UserResponseDto
     public int? RoleId { get; set; }
     public string? Unit { get; set; }
     public string? Title { get; set; }
+    public string? PhoneNumber { get; set; }
+    public string? Shift { get; set; }
     public int? ProfessionId { get; set; }
     public string? ProfessionName { get; set; }
     public int? PositionId { get; set; }
@@ -19,6 +21,7 @@ public class UserResponseDto
     public DateTime? LastLogin { get; set; }
     public DateTime CreatedAt { get; set; }
     public string? ProfileImage { get; set; }
+    public List<AvailabilityDto> Availability { get; set; } = [];
 }
 
 public class UpdateUserStatusDto
@@ -35,4 +38,5 @@ public class UpdateUserProfessionDto
 {
     public int? ProfessionId { get; set; }
     public int? PositionId { get; set; }
+    public string? PhoneNumber { get; set; }
 }

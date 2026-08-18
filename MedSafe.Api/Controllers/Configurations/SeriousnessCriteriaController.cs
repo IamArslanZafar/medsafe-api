@@ -35,8 +35,10 @@ public class SeriousnessCriteriaController : ControllerBase
         return Ok(MapToDto(criterion));
     }
 
+    // Open to any logged-in role — the incident report form's "Seriousness
+    // Criteria" field lets a user add a new one inline while filling out a
+    // report. Update/Delete stay Admin-only.
     [HttpPost]
-    [Authorize(Roles = "Admin")]
     public async Task<IActionResult> Create(SeriousnessCriterionUpsertDto dto)
     {
         if (await _db.SeriousnessCriteria.AnyAsync(c => c.Name == dto.Name))

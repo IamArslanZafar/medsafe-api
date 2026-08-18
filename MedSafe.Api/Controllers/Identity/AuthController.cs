@@ -93,6 +93,13 @@ public class AuthController : ControllerBase
 
         await _repo.SaveAsync();
 
+        var professionName = user.ProfessionId.HasValue
+            ? await _db.Professions.Where(p => p.Id == user.ProfessionId).Select(p => p.Name).FirstOrDefaultAsync()
+            : null;
+        var positionName = user.PositionId.HasValue
+            ? await _db.Positions.Where(p => p.Id == user.PositionId).Select(p => p.Name).FirstOrDefaultAsync()
+            : null;
+
         return Ok(new AuthResponseDto
         {
             AccessToken = token,
@@ -102,7 +109,12 @@ public class AuthController : ControllerBase
             Email = user.Email,
             Unit = user.Unit,
             Title = user.Title,
+            PhoneNumber = user.PhoneNumber,
+            Shift = user.Shift,
             ProfessionId = user.ProfessionId,
+            ProfessionName = professionName,
+            PositionId = user.PositionId,
+            PositionName = positionName,
             ProfileImage = user.ProfileImage,
             Permissions = permissions
         });
@@ -190,6 +202,30 @@ public class AuthController : ControllerBase
         return Ok(new { message = "Name updated successfully.", name = user.Name });
     }
 
+    // Self-service, same pattern as ChangeName — not a login credential, so no
+    // current-password re-check. Empty/whitespace clears the number.
+    [HttpPut("change-phone")]
+    [Authorize]
+    public async Task<IActionResult> ChangePhone(ChangePhoneDto dto)
+    {
+        var user = await _repo.GetByIdAsync(_currentUser.UserId);
+        if (user == null) return NotFound();
+
+        user.PhoneNumber = string.IsNullOrWhiteSpace(dto.PhoneNumber) ? null : dto.PhoneNumber.Trim();
+
+        await _repo.AddAuditLogAsync(new AuditLog
+        {
+            UserId = user.Id,
+            UserName = user.Name,
+            Action = "CHANGE_PHONE",
+            Details = "User changed their own phone number",
+            IpAddress = HttpContext.Connection.RemoteIpAddress?.ToString()
+        });
+
+        await _repo.SaveAsync();
+        return Ok(new { message = "Phone number updated successfully.", phoneNumber = user.PhoneNumber });
+    }
+
     // Re-verifies the current password so a stolen/left-open session alone isn't
     // enough to hijack the account's login credentials.
     [HttpPut("change-email")]
@@ -261,6 +297,10 @@ public class AuthController : ControllerBase
             !await _db.Positions.AnyAsync(p => p.Id == dto.PositionId && p.ProfessionId == dto.ProfessionId && p.IsActive))
             return BadRequest(new { message = "Invalid position for the selected profession" });
 
+        var availabilityError = AvailabilityHelper.Validate(dto.Availability);
+        if (availabilityError != null)
+            return BadRequest(new { message = availabilityError });
+
         string? profileImagePath = null;
         if (dto.ProfileImage != null)
             profileImagePath = await _fileService.SaveProfileImageAsync(dto.ProfileImage);
@@ -273,12 +313,21 @@ public class AuthController : ControllerBase
             Role = dto.Role,
             Unit = dto.Unit,
             Title = dto.Title,
+            PhoneNumber = dto.PhoneNumber,
+            Shift = dto.Shift,
             ProfessionId = dto.ProfessionId,
             PositionId = dto.PositionId,
             ProfileImage = profileImagePath
         };
 
         await _repo.AddAsync(user);
+        await _repo.SaveAsync();
+
+        if (dto.Availability.Count > 0)
+        {
+            _db.UserAvailabilities.AddRange(AvailabilityHelper.BuildEntities(user.Id, dto.Availability));
+            await _db.SaveChangesAsync();
+        }
 
         await _repo.AddAuditLogAsync(new AuditLog
         {
@@ -289,6 +338,6 @@ public class AuthController : ControllerBase
         });
 
         await _repo.SaveAsync();
-        return Ok(new { message = $"{dto.Role} account created.", userId = user.Id, profileImage = profileImagePath });
+        return Ok(new { message = $"{dto.Role} account created.", userId = user.Id, profileImage = profileImagePath, availabilityDays = dto.Availability.Count });
     }
 }

@@ -40,8 +40,11 @@ public class CurrentMedicationsController : ControllerBase
         return Ok(MapToDto(item));
     }
 
+    // Open to any logged-in role (not just Admin) — the incident report form's
+    // "Current Medications" field (mode="tags") calls this so a nurse/physician
+    // can add a new medication inline while filling out a report, same as an
+    // Admin adding one from Configurations. Update/Delete stay Admin-only.
     [HttpPost]
-    [Authorize(Roles = "Admin")]
     public async Task<IActionResult> Create(CurrentMedicationUpsertDto dto)
     {
         if (await _db.CurrentMedications.AnyAsync(m => m.Name == dto.Name))

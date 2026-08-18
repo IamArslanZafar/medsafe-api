@@ -35,8 +35,10 @@ public class PatientOutcomesController : ControllerBase
         return Ok(MapToDto(outcome));
     }
 
+    // Open to any logged-in role — the incident report form's "Patient Outcome"
+    // field lets a user add a new one inline while filling out a report.
+    // Update/Delete stay Admin-only.
     [HttpPost]
-    [Authorize(Roles = "Admin")]
     public async Task<IActionResult> Create(PatientOutcomeUpsertDto dto)
     {
         if (await _db.PatientOutcomes.AnyAsync(o => o.Name == dto.Name))

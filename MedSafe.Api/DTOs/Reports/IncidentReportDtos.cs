@@ -33,7 +33,6 @@ public sealed class SubmitIncidentReportRequest
     // STEP 4
     public int ProfessionId { get; set; }
     public int PositionId { get; set; }
-    public List<ManualNotificationRequest> Notifications { get; set; } = [];
 
     // STEP 5
     public string? ImmediateActionTaken { get; set; }
@@ -52,13 +51,6 @@ public sealed class IncidentMedicationRequest
     public int? FrequencyId { get; set; }
     public int? FormulationId { get; set; }
     public DateTime MedicationGivenAt { get; set; }
-}
-
-public sealed class ManualNotificationRequest
-{
-    public int NotificationTypeId { get; set; }
-    public string PersonName { get; set; } = string.Empty;
-    public DateTime NotifiedAt { get; set; }
 }
 
 public sealed class SubmitIncidentReportResponse
@@ -104,7 +96,6 @@ public sealed class IncidentReportDto
 
     public int? ProfessionId { get; set; }
     public int? PositionId { get; set; }
-    public List<ManualNotificationDto> Notifications { get; set; } = [];
 
     public string? ImmediateActionTaken { get; set; }
     public int PatientOutcomeId { get; set; }
@@ -123,14 +114,6 @@ public sealed class IncidentMedicationDto
     public int? FrequencyId { get; set; }
     public int? FormulationId { get; set; }
     public DateTime MedicationGivenAt { get; set; }
-}
-
-public sealed class ManualNotificationDto
-{
-    public int Id { get; set; }
-    public int NotificationTypeId { get; set; }
-    public string PersonName { get; set; } = null!;
-    public DateTime NotifiedAt { get; set; }
 }
 
 public sealed class IncidentReportAttachmentDto

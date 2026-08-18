@@ -19,9 +19,13 @@ public class RegisterDto
     [Required] public string Role { get; set; } = string.Empty; // Nurse | Physician | Admin
     public string? Unit { get; set; }
     public string? Title { get; set; }
+    public string? PhoneNumber { get; set; }
+    public string? Shift { get; set; }
     public int? ProfessionId { get; set; }
     public int? PositionId { get; set; }
     public IFormFile? ProfileImage { get; set; }
+    // Bound from indexed form fields: Availability[0].DayOfWeek, Availability[0].StartTime, ...
+    public List<AvailabilityRequestDto> Availability { get; set; } = [];
 }
 
 public class RefreshTokenDto
@@ -32,6 +36,11 @@ public class RefreshTokenDto
 public class ChangeNameDto
 {
     [Required] public string NewName { get; set; } = string.Empty;
+}
+
+public class ChangePhoneDto
+{
+    public string? PhoneNumber { get; set; }
 }
 
 public class ChangeEmailDto
@@ -55,7 +64,12 @@ public class AuthResponseDto
     public string Email { get; set; } = string.Empty;
     public string? Unit { get; set; }
     public string? Title { get; set; }
+    public string? PhoneNumber { get; set; }
+    public string? Shift { get; set; }
     public int? ProfessionId { get; set; }
+    public string? ProfessionName { get; set; }
+    public int? PositionId { get; set; }
+    public string? PositionName { get; set; }
     public string? ProfileImage { get; set; }
     // Permission tags granted to the user's Role (e.g. "alert_rules.manage") — drives
     // frontend button/section gating so it stays in sync with whatever an Admin configures

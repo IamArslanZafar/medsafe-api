@@ -4,6 +4,7 @@ using MedSafe.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace MedSafeAPI.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260817110124_AddPhoneNumberToUsers")]
+    partial class AddPhoneNumberToUsers
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -790,9 +793,6 @@ namespace MedSafeAPI.Migrations
                     b.Property<DateTime>("CreatedDate")
                         .HasColumnType("datetime2");
 
-                    b.Property<int>("EmailAttemptCount")
-                        .HasColumnType("int");
-
                     b.Property<int>("IncidentReportId")
                         .HasColumnType("int");
 
@@ -802,18 +802,8 @@ namespace MedSafeAPI.Migrations
                     b.Property<bool>("IsRead")
                         .HasColumnType("bit");
 
-                    b.Property<DateTime?>("LastEmailAttemptAt")
-                        .HasColumnType("datetime2");
-
                     b.Property<string>("Message")
                         .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("Notes")
-                        .HasMaxLength(1000)
-                        .HasColumnType("nvarchar(1000)");
-
-                    b.Property<int?>("NotificationMethodId")
-                        .HasColumnType("int");
 
                     b.Property<int>("NotificationTypeId")
                         .HasColumnType("int");
@@ -832,13 +822,6 @@ namespace MedSafeAPI.Migrations
                     b.Property<int?>("RecipientUserId")
                         .HasColumnType("int");
 
-                    b.Property<DateTime?>("SentAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("Status")
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
-
                     b.Property<string>("Title")
                         .HasColumnType("nvarchar(max)");
 
@@ -850,8 +833,6 @@ namespace MedSafeAPI.Migrations
                     b.HasIndex("AlertRuleId");
 
                     b.HasIndex("IncidentReportId");
-
-                    b.HasIndex("NotificationMethodId");
 
                     b.HasIndex("NotificationTypeId");
 
@@ -2502,9 +2483,6 @@ namespace MedSafeAPI.Migrations
                     b.Property<int?>("RoleId")
                         .HasColumnType("int");
 
-                    b.Property<string>("Shift")
-                        .HasColumnType("nvarchar(max)");
-
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
@@ -2525,34 +2503,6 @@ namespace MedSafeAPI.Migrations
                     b.HasIndex("ProfessionId", "PositionId");
 
                     b.ToTable("Users");
-                });
-
-            modelBuilder.Entity("MedSafe.Models.UserAvailability", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<int>("DayOfWeek")
-                        .HasColumnType("int");
-
-                    b.Property<TimeOnly>("EndTime")
-                        .HasColumnType("time");
-
-                    b.Property<TimeOnly>("StartTime")
-                        .HasColumnType("time");
-
-                    b.Property<int>("UserId")
-                        .HasColumnType("int");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("UserId", "DayOfWeek")
-                        .IsUnique();
-
-                    b.ToTable("UserAvailabilities");
                 });
 
             modelBuilder.Entity("MedSafe.Models.AlertConditionFieldOperator", b =>
@@ -2689,12 +2639,6 @@ namespace MedSafeAPI.Migrations
                         .IsRequired()
                         .HasConstraintName("FK_IncidentNotifications_IncidentReport");
 
-                    b.HasOne("MedSafe.Models.NotificationMethod", "NotificationMethod")
-                        .WithMany()
-                        .HasForeignKey("NotificationMethodId")
-                        .OnDelete(DeleteBehavior.NoAction)
-                        .HasConstraintName("FK_IncidentNotifications_NotificationMethod");
-
                     b.HasOne("MedSafe.Models.NotificationRecipientType", null)
                         .WithMany()
                         .HasForeignKey("NotificationTypeId")
@@ -2717,8 +2661,6 @@ namespace MedSafeAPI.Migrations
                     b.Navigation("AlertRule");
 
                     b.Navigation("IncidentReport");
-
-                    b.Navigation("NotificationMethod");
 
                     b.Navigation("RecipientUser");
 
@@ -2994,17 +2936,6 @@ namespace MedSafeAPI.Migrations
                         .HasPrincipalKey("ProfessionId", "Id")
                         .OnDelete(DeleteBehavior.NoAction)
                         .HasConstraintName("FK_Users_ProfessionPosition");
-                });
-
-            modelBuilder.Entity("MedSafe.Models.UserAvailability", b =>
-                {
-                    b.HasOne("MedSafe.Models.User", "User")
-                        .WithMany()
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("MedSafe.Models.AlertConditionField", b =>

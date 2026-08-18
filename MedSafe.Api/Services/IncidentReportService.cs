@@ -45,7 +45,6 @@ public class IncidentReportService : IIncidentReportService
             AddCurrentMedications(incident.Id, request.CurrentMedicationIds);
             AddContributingFactors(incident.Id, request.ContributingFactorIds);
             AddSeriousnessCriteria(incident.Id, request.SeriousnessCriterionIds);
-            AddNotifications(incident.Id, request.Notifications);
             AddInitialStatusHistory(incident.Id);
             await _db.SaveChangesAsync(cancellationToken);
 
@@ -92,7 +91,6 @@ public class IncidentReportService : IIncidentReportService
             .Include(r => r.AllergyLinks)
             .Include(r => r.CurrentMedicationLinks)
             .Include(r => r.Attachments)
-            .Include(r => r.Notifications)
             .FirstOrDefaultAsync(r => r.Id == id, cancellationToken);
 
         return report == null ? null : MapToDto(report);
@@ -130,7 +128,6 @@ public class IncidentReportService : IIncidentReportService
             .Include(r => r.AllergyLinks)
             .Include(r => r.CurrentMedicationLinks)
             .Include(r => r.Attachments)
-            .Include(r => r.Notifications)
             .OrderByDescending(r => r.SubmittedAt)
             .ToListAsync(cancellationToken);
 
@@ -367,20 +364,6 @@ public class IncidentReportService : IIncidentReportService
             x => x.Id == request.PositionId && x.ProfessionId == request.ProfessionId && x.IsActive, cancellationToken);
         if (!validPosition)
             throw new ValidationException("Invalid position for selected profession.");
-
-        foreach (var notification in request.Notifications)
-        {
-            if (string.IsNullOrWhiteSpace(notification.PersonName))
-                throw new ValidationException("Person notified name is required.");
-
-            if (notification.NotifiedAt == default)
-                throw new ValidationException("Notification date/time is required.");
-
-            var validType = await _db.NotificationRecipientTypes
-                .AnyAsync(x => x.Id == notification.NotificationTypeId && x.IsActive, cancellationToken);
-            if (!validType)
-                throw new ValidationException("Invalid notification type.");
-        }
     }
 
     private IncidentReport BuildIncidentReport(SubmitIncidentReportRequest request)
@@ -500,22 +483,6 @@ public class IncidentReportService : IIncidentReportService
         }
     }
 
-    private void AddNotifications(int incidentReportId, List<ManualNotificationRequest> notifications)
-    {
-        foreach (var notification in notifications)
-        {
-            _db.IncidentNotifications.Add(new IncidentNotification
-            {
-                IncidentReportId = incidentReportId,
-                NotificationTypeId = notification.NotificationTypeId,
-                PersonName = notification.PersonName.Trim(),
-                NotifiedAt = notification.NotifiedAt,
-                CreatedBy = _currentUser.UserId,
-                CreatedDate = DateTime.UtcNow
-            });
-        }
-    }
-
     private void AddInitialStatusHistory(int incidentReportId)
     {
         _db.IncidentReportStatusHistories.Add(new IncidentReportStatusHistory
@@ -589,13 +556,6 @@ public class IncidentReportService : IIncidentReportService
         SeriousnessCriterionIds = r.SeriousnessCriteria.Select(c => c.SeriousnessCriterionId).ToList(),
         ProfessionId = r.ProfessionId,
         PositionId = r.PositionId,
-        Notifications = r.Notifications.Select(n => new ManualNotificationDto
-        {
-            Id = n.Id,
-            NotificationTypeId = n.NotificationTypeId,
-            PersonName = n.PersonName,
-            NotifiedAt = n.NotifiedAt
-        }).ToList(),
         ImmediateActionTaken = r.ImmediateActionTaken,
         PatientOutcomeId = r.PatientOutcomeId,
         PatientOutcomeDetails = r.PatientOutcomeDetails,

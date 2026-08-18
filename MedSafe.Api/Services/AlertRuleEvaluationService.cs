@@ -33,6 +33,11 @@ public class AlertRuleEvaluationService : IAlertRuleEvaluationService
             return;
         }
 
+        var emailMethodId = await _db.NotificationMethods
+            .Where(x => x.Code == "EMAIL" && x.IsActive)
+            .Select(x => (int?)x.Id)
+            .SingleOrDefaultAsync(cancellationToken);
+
         // MatchModeId != null skips legacy rules that don't use the new dynamic
         // condition-builder structure yet.
         var rules = await _db.AlertRules
@@ -56,14 +61,14 @@ public class AlertRuleEvaluationService : IAlertRuleEvaluationService
             if (!matched)
                 continue;
 
-            await CreateNotificationsAsync(report, rule, cancellationToken);
+            await CreateNotificationsAsync(report, rule, emailMethodId, cancellationToken);
             rule.LastTriggered = DateTime.UtcNow;
         }
 
         await _db.SaveChangesAsync(cancellationToken);
     }
 
-    private async Task CreateNotificationsAsync(IncidentReport report, AlertRule rule, CancellationToken cancellationToken)
+    private async Task CreateNotificationsAsync(IncidentReport report, AlertRule rule, int? emailMethodId, CancellationToken cancellationToken)
     {
         var recipients = rule.Recipients
             .Where(x => x.IsActive)
@@ -93,6 +98,8 @@ public class AlertRuleEvaluationService : IAlertRuleEvaluationService
                 RecipientUserId = recipient.RecipientUserId,
                 NotificationTypeId = recipient.RecipientTypeId,
                 UrgencyId = rule.UrgencyId,
+                NotificationMethodId = emailMethodId,
+                Status = "PENDING",
                 PersonName = recipient.RecipientUser.Name,
                 Title = rule.NotificationTitle,
                 Message = rule.NotificationMessage,

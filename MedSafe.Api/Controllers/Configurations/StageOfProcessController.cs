@@ -35,8 +35,10 @@ public class StageOfProcessController : ControllerBase
         return Ok(MapToDto(stage));
     }
 
+    // Open to any logged-in role — the incident report form's "Stage of Process"
+    // field lets a user add a new one inline while filling out a report.
+    // Update/Delete stay Admin-only.
     [HttpPost]
-    [Authorize(Roles = "Admin")]
     public async Task<IActionResult> Create(StageOfProcessUpsertDto dto)
     {
         if (await _db.StageOfProcesses.AnyAsync(s => s.Name == dto.Name))

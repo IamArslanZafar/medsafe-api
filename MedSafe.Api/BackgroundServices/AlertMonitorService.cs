@@ -116,6 +116,12 @@ public class AlertMonitorService : BackgroundService
         if (reminderUrgency == null)
             return;
 
+        var emailMethodId = await db.NotificationMethods
+            .AsNoTracking()
+            .Where(x => x.Code == "EMAIL" && x.IsActive)
+            .Select(x => (int?)x.Id)
+            .SingleOrDefaultAsync(cancellationToken);
+
         var reviewerIds = reviewerByReport.Values.Distinct().ToList();
         var reviewers = await db.Users
             .AsNoTracking()
@@ -153,6 +159,8 @@ public class AlertMonitorService : BackgroundService
                     RecipientUserId = reviewerUserId,
                     NotificationTypeId = assignedReviewerTypeId,
                     UrgencyId = reminderUrgency.Id,
+                    NotificationMethodId = emailMethodId,
+                    Status = "PENDING",
                     PersonName = reviewerName,
                     Title = ReminderTitle,
                     Message = $"Report {report.IncidentReportNumber} has been awaiting assessment for more than 48 hours.",
@@ -180,6 +188,8 @@ public class AlertMonitorService : BackgroundService
                         RecipientUserId = admin.Id,
                         NotificationTypeId = administratorTypeId,
                         UrgencyId = reminderUrgency.Id,
+                        NotificationMethodId = emailMethodId,
+                        Status = "PENDING",
                         PersonName = admin.Name,
                         Title = UnassignedTitle,
                         Message = $"Report {report.IncidentReportNumber} has been pending for more than 48 hours and has no assigned reviewer.",

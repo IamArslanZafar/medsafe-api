@@ -10,6 +10,8 @@ using MedSafeAPI.BackgroundServices;
 using MedSafeAPI.Filter;
 using MedSafeAPI.Services;
 
+QuestPDF.Settings.License = QuestPDF.Infrastructure.LicenseType.Community;
+
 var builder = WebApplication.CreateBuilder(args);
 
 // EF Core
@@ -29,7 +31,11 @@ builder.Services.AddScoped<IDashboardService, DashboardService>();
 builder.Services.AddScoped<IAlertRuleService, AlertRuleService>();
 builder.Services.AddScoped<IAlertRuleEvaluationService, AlertRuleEvaluationService>();
 builder.Services.AddScoped<INotificationService, NotificationService>();
+builder.Services.Configure<EmailOptions>(builder.Configuration.GetSection(EmailOptions.SectionName));
+builder.Services.AddScoped<IEmailService, EmailService>();
+builder.Services.AddScoped<IIncidentReportPdfService, IncidentReportPdfService>();
 builder.Services.AddHostedService<AlertMonitorService>();
+builder.Services.AddHostedService<EmailNotificationWorker>();
 
 // Repositories
 builder.Services.AddScoped<IUserRepository, UserRepository>();

@@ -35,8 +35,10 @@ public class ErrorCategoriesController : ControllerBase
         return Ok(MapToDto(category));
     }
 
+    // Open to any logged-in role — the incident report form's "Error Category"
+    // field lets a user add a new one inline while filling out a report.
+    // Update/Delete stay Admin-only.
     [HttpPost]
-    [Authorize(Roles = "Admin")]
     public async Task<IActionResult> Create(ErrorCategoryUpsertDto dto)
     {
         if (await _db.ErrorCategories.AnyAsync(c => c.Name == dto.Name))

@@ -34,8 +34,10 @@ public class RoutesController : ControllerBase
         return Ok(MapToDto(route));
     }
 
+    // Open to any logged-in role — the incident report form's medication fields
+    // let a user add a new Route inline while filling out a report. Update/Delete
+    // stay Admin-only.
     [HttpPost]
-    [Authorize(Roles = "Admin")]
     public async Task<IActionResult> Create(RouteUpsertDto dto)
     {
         if (await _db.Routes.AnyAsync(r => r.Name == dto.Name))

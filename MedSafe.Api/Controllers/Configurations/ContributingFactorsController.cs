@@ -35,8 +35,10 @@ public class ContributingFactorsController : ControllerBase
         return Ok(MapToDto(factor));
     }
 
+    // Open to any logged-in role — the incident report form's "Contributing
+    // Factors" field lets a user add a new one inline while filling out a
+    // report. Update/Delete stay Admin-only.
     [HttpPost]
-    [Authorize(Roles = "Admin")]
     public async Task<IActionResult> Create(ContributingFactorUpsertDto dto)
     {
         var code = await GenerateCodeAsync(dto.Name);
