@@ -567,7 +567,13 @@ public class AppDbContext : DbContext
 
         modelBuilder.Entity<CurrentMedication>(entity =>
         {
-            entity.HasIndex(e => e.Name).IsUnique();
+            // Not unique — Name alone no longer identifies a row. Two entries can
+            // share the same drug/strength label with different Dose/Unit/Route/
+            // Frequency/Formulation (e.g. "Warfarin 5mg" given IV at 8mg vs at
+            // 23mg are two distinct entries). Uniqueness is enforced at the
+            // application level in CurrentMedicationsController on the full
+            // (Name, DoseValue, DoseUnitId, RouteId, FrequencyId, FormulationId)
+            // tuple instead — see Create()/Update().
             entity.Property(e => e.Name).HasMaxLength(200);
             entity.Property(e => e.Description).HasMaxLength(500);
             entity.Property(e => e.DoseValue).HasPrecision(18, 4);

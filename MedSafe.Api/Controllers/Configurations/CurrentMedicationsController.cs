@@ -41,21 +41,33 @@ public class CurrentMedicationsController : ControllerBase
     }
 
     // Open to any logged-in role (not just Admin) — the incident report form's
-    // "Current Medications" field (mode="tags") calls this so a nurse/physician
-    // can add a new medication inline while filling out a report, same as an
-    // Admin adding one from Configurations. Update/Delete stay Admin-only.
+    // "Current Medications" field (mode="tags") and its Add Medication modal both
+    // call this so a nurse/physician can add a medication inline while filling
+    // out a report, same as an Admin adding one from Configurations.
+    //
+    // Find-or-create on the FULL (Name, DoseValue, DoseUnitId, RouteId,
+    // FrequencyId, FormulationId) tuple, not on Name alone — two entries can
+    // share a drug/strength label with different administration details (e.g.
+    // "Warfarin 5mg" given IV at 8mg vs at 23mg are two distinct entries, both
+    // worth keeping so each is selectable/auto-fillable on its own later). An
+    // exact repeat of an existing tuple returns that row instead of duplicating
+    // it. Update/Delete stay Admin-only.
     [HttpPost]
     public async Task<IActionResult> Create(CurrentMedicationUpsertDto dto)
     {
-        if (await _db.CurrentMedications.AnyAsync(m => m.Name == dto.Name))
-            return Conflict(new { message = "A medication with this name already exists" });
+        var name = dto.Name.Trim();
+        var existing = await _db.CurrentMedications.FirstOrDefaultAsync(m =>
+            m.Name == name && m.DoseValue == dto.DoseValue && m.DoseUnitId == dto.DoseUnitId &&
+            m.RouteId == dto.RouteId && m.FrequencyId == dto.FrequencyId && m.FormulationId == dto.FormulationId);
+        if (existing != null)
+            return Ok(MapToDto(existing));
 
         var nextOrder = dto.DisplayOrder
             ?? (await _db.CurrentMedications.AnyAsync() ? await _db.CurrentMedications.MaxAsync(m => m.DisplayOrder) + 1 : 1);
 
         var item = new CurrentMedication
         {
-            Name = dto.Name.Trim(),
+            Name = name,
             Description = dto.Description,
             IsActive = dto.IsActive,
             DisplayOrder = nextOrder,
@@ -73,30 +85,6 @@ public class CurrentMedicationsController : ControllerBase
         return Ok(MapToDto(item));
     }
 
-    // Any logged-in role — called once, right after a brand-new medication is
-    // created inline from the Incident Report wizard's Add Medication modal, to
-    // record its first-ever Dose/Unit/Route/Frequency/Formulation so picking it
-    // again on a later report can auto-fill those fields. Only fills fields that
-    // are still null; never overwrites a value the entry already has, so a later
-    // report using different values for the same drug can't silently rewrite the
-    // shared lookup. Update (below) is a deliberate Admin correction instead, and
-    // always overwrites with whatever the Configurations edit form has.
-    [HttpPut("{id}/dose-defaults")]
-    public async Task<IActionResult> SetDoseDefaults(int id, SetCurrentMedicationDoseDefaultsDto dto)
-    {
-        var item = await _db.CurrentMedications.FindAsync(id);
-        if (item == null) return NotFound();
-
-        item.DoseValue ??= dto.DoseValue;
-        item.DoseUnitId ??= dto.DoseUnitId;
-        item.RouteId ??= dto.RouteId;
-        item.FrequencyId ??= dto.FrequencyId;
-        item.FormulationId ??= dto.FormulationId;
-
-        await _db.SaveChangesAsync();
-        return Ok(MapToDto(item));
-    }
-
     [HttpPut("{id}")]
     [Authorize(Roles = "Admin")]
     public async Task<IActionResult> Update(int id, CurrentMedicationUpsertDto dto)
@@ -104,10 +92,13 @@ public class CurrentMedicationsController : ControllerBase
         var item = await _db.CurrentMedications.FindAsync(id);
         if (item == null) return NotFound();
 
-        if (await _db.CurrentMedications.AnyAsync(m => m.Id != id && m.Name == dto.Name))
-            return Conflict(new { message = "A medication with this name already exists" });
+        var name = dto.Name.Trim();
+        if (await _db.CurrentMedications.AnyAsync(m =>
+                m.Id != id && m.Name == name && m.DoseValue == dto.DoseValue && m.DoseUnitId == dto.DoseUnitId &&
+                m.RouteId == dto.RouteId && m.FrequencyId == dto.FrequencyId && m.FormulationId == dto.FormulationId))
+            return Conflict(new { message = "A medication with this exact name and dose/route/frequency/formulation already exists" });
 
-        item.Name = dto.Name.Trim();
+        item.Name = name;
         item.Description = dto.Description;
         item.IsActive = dto.IsActive;
         if (dto.DisplayOrder.HasValue) item.DisplayOrder = dto.DisplayOrder.Value;
