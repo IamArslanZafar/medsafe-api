@@ -570,7 +570,24 @@ public class AppDbContext : DbContext
             entity.HasIndex(e => e.Name).IsUnique();
             entity.Property(e => e.Name).HasMaxLength(200);
             entity.Property(e => e.Description).HasMaxLength(500);
+            entity.Property(e => e.DoseValue).HasPrecision(18, 4);
         });
+
+        modelBuilder.Entity<CurrentMedication>()
+            .HasOne<DoseUnit>().WithMany().HasForeignKey(m => m.DoseUnitId)
+            .HasConstraintName("FK_CurrentMedication_DoseUnit").OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<CurrentMedication>()
+            .HasOne<Route>().WithMany().HasForeignKey(m => m.RouteId)
+            .HasConstraintName("FK_CurrentMedication_Route").OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<CurrentMedication>()
+            .HasOne<Frequency>().WithMany().HasForeignKey(m => m.FrequencyId)
+            .HasConstraintName("FK_CurrentMedication_Frequency").OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<CurrentMedication>()
+            .HasOne<Formulation>().WithMany().HasForeignKey(m => m.FormulationId)
+            .HasConstraintName("FK_CurrentMedication_Formulation").OnDelete(DeleteBehavior.NoAction);
 
         // ── Role / Permission ────────────────────────────────────────────
         modelBuilder.Entity<Role>(entity =>

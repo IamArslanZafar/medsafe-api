@@ -59,11 +59,40 @@ public class CurrentMedicationsController : ControllerBase
             Description = dto.Description,
             IsActive = dto.IsActive,
             DisplayOrder = nextOrder,
+            DoseValue = dto.DoseValue,
+            DoseUnitId = dto.DoseUnitId,
+            RouteId = dto.RouteId,
+            FrequencyId = dto.FrequencyId,
+            FormulationId = dto.FormulationId,
             CreatedBy = _currentUser.UserId,
             CreatedDate = DateTime.UtcNow
         };
 
         _db.CurrentMedications.Add(item);
+        await _db.SaveChangesAsync();
+        return Ok(MapToDto(item));
+    }
+
+    // Any logged-in role — called once, right after a brand-new medication is
+    // created inline from the Incident Report wizard's Add Medication modal, to
+    // record its first-ever Dose/Unit/Route/Frequency/Formulation so picking it
+    // again on a later report can auto-fill those fields. Only fills fields that
+    // are still null; never overwrites a value the entry already has, so a later
+    // report using different values for the same drug can't silently rewrite the
+    // shared lookup. Update (below) is a deliberate Admin correction instead, and
+    // always overwrites with whatever the Configurations edit form has.
+    [HttpPut("{id}/dose-defaults")]
+    public async Task<IActionResult> SetDoseDefaults(int id, SetCurrentMedicationDoseDefaultsDto dto)
+    {
+        var item = await _db.CurrentMedications.FindAsync(id);
+        if (item == null) return NotFound();
+
+        item.DoseValue ??= dto.DoseValue;
+        item.DoseUnitId ??= dto.DoseUnitId;
+        item.RouteId ??= dto.RouteId;
+        item.FrequencyId ??= dto.FrequencyId;
+        item.FormulationId ??= dto.FormulationId;
+
         await _db.SaveChangesAsync();
         return Ok(MapToDto(item));
     }
@@ -82,6 +111,11 @@ public class CurrentMedicationsController : ControllerBase
         item.Description = dto.Description;
         item.IsActive = dto.IsActive;
         if (dto.DisplayOrder.HasValue) item.DisplayOrder = dto.DisplayOrder.Value;
+        item.DoseValue = dto.DoseValue;
+        item.DoseUnitId = dto.DoseUnitId;
+        item.RouteId = dto.RouteId;
+        item.FrequencyId = dto.FrequencyId;
+        item.FormulationId = dto.FormulationId;
         item.ModifiedBy = _currentUser.UserId;
         item.ModifiedDate = DateTime.UtcNow;
 
@@ -129,6 +163,11 @@ public class CurrentMedicationsController : ControllerBase
         Name = m.Name,
         Description = m.Description,
         IsActive = m.IsActive,
-        DisplayOrder = m.DisplayOrder
+        DisplayOrder = m.DisplayOrder,
+        DoseValue = m.DoseValue,
+        DoseUnitId = m.DoseUnitId,
+        RouteId = m.RouteId,
+        FrequencyId = m.FrequencyId,
+        FormulationId = m.FormulationId
     };
 }

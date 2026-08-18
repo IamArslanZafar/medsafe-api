@@ -57,8 +57,15 @@ public class IncidentReportPdfService : IIncidentReportPdfService
                 page.Margin(40);
                 page.DefaultTextStyle(x => x.FontSize(9).FontColor(TextDark).FontFamily(Fonts.Calibri));
 
-                page.Header().Element(ComposeHeader);
-                page.Content().PaddingTop(18).Element(c => ComposeContent(c, report, lookups));
+                // Header is composed as the first item of Content (not via page.Header(),
+                // which QuestPDF repeats on every page) — matches the frontend, which
+                // only draws it once at the very top before the content flows down and
+                // spills onto later pages.
+                page.Content().Column(col =>
+                {
+                    col.Item().Element(ComposeHeader);
+                    col.Item().PaddingTop(18).Element(c => ComposeContent(c, report, lookups));
+                });
                 page.Footer().Element(ComposeFooter);
             });
         });
@@ -244,20 +251,25 @@ public class IncidentReportPdfService : IIncidentReportPdfService
     private static void Section(IContainer container, string title, Action<ColumnDescriptor> content) =>
         Section(container, title, (inner, _) => content(inner));
 
+    // Each label/value pair gets its OWN bordered box (matching the frontend's
+    // per-cell doc.rect(...) calls) — a row of `cols` items is `cols` separate
+    // boxes side by side, not one undivided strip. A partial last row (fewer
+    // items than `cols`) is padded with blank spacers so every box keeps the
+    // same width as a full row's, instead of stretching to fill the gap.
     private static void StatGrid(ColumnDescriptor col, Func<bool> nextStripe, int cols, params (string label, string value, (string label, string bg, string color)? badge)[] items)
     {
         for (var i = 0; i < items.Length; i += cols)
         {
             var rowItems = items.Skip(i).Take(cols).ToArray();
             var tint = nextStripe();
-            col.Item().Background(tint ? RowTint : "#ffffff").Border(0.6f).BorderColor(Border).Padding(4).Row(row =>
+            col.Item().Row(row =>
             {
                 foreach (var (label, value, badge) in rowItems)
                 {
-                    row.RelativeItem().Row(cell =>
+                    row.RelativeItem().Background(tint ? RowTint : "#ffffff").Border(0.6f).BorderColor(Border).Padding(4).Row(cell =>
                     {
                         cell.ConstantItem(85).Text(label).FontSize(8).Bold().FontColor(TextMuted);
-                        cell.RelativeItem().PaddingLeft(6).BorderLeft(0.6f).BorderColor(Border).PaddingLeft(8).Element(e =>
+                        cell.RelativeItem().BorderLeft(0.6f).BorderColor(Border).PaddingLeft(8).Element(e =>
                         {
                             if (badge.HasValue)
                                 Pill(e, badge.Value.label, badge.Value.bg, badge.Value.color);
@@ -266,6 +278,8 @@ public class IncidentReportPdfService : IIncidentReportPdfService
                         });
                     });
                 }
+                for (var pad = rowItems.Length; pad < cols; pad++)
+                    row.RelativeItem();
             });
         }
     }
@@ -275,8 +289,8 @@ public class IncidentReportPdfService : IIncidentReportPdfService
         var tint = nextStripe();
         col.Item().Background(tint ? RowTint : "#ffffff").Border(0.6f).BorderColor(Border).Padding(6).Row(row =>
         {
-            row.ConstantItem(140).Text(label).FontSize(8).Bold().FontColor(TextMuted);
-            row.RelativeItem().PaddingLeft(8).BorderLeft(0.6f).BorderColor(Border).PaddingLeft(8)
+            row.ConstantItem(150).Text(label).FontSize(8).Bold().FontColor(TextMuted);
+            row.RelativeItem().BorderLeft(0.6f).BorderColor(Border).PaddingLeft(8)
                 .Text(string.IsNullOrWhiteSpace(value) ? "—" : value).FontSize(9).FontColor(TextDark);
         });
     }
@@ -306,26 +320,26 @@ public class IncidentReportPdfService : IIncidentReportPdfService
 
             table.Header(header =>
             {
-                header.Cell().Element(HeaderCell).Text("Drug");
-                header.Cell().Element(HeaderCell).Text("Dose");
-                header.Cell().Element(HeaderCell).Text("Route");
-                header.Cell().Element(HeaderCell).Text("Frequency");
-                header.Cell().Element(HeaderCell).Text("Formulation");
+                header.Cell().Element(HeaderCell).Text("Drug").FontSize(8.5f).Bold().FontColor(Navy);
+                header.Cell().Element(HeaderCell).Text("Dose").FontSize(8.5f).Bold().FontColor(Navy);
+                header.Cell().Element(HeaderCell).Text("Route").FontSize(8.5f).Bold().FontColor(Navy);
+                header.Cell().Element(HeaderCell).Text("Frequency").FontSize(8.5f).Bold().FontColor(Navy);
+                header.Cell().Element(HeaderCell).Text("Formulation").FontSize(8.5f).Bold().FontColor(Navy);
             });
 
             foreach (var m in r.Medications)
             {
-                table.Cell().Element(BodyCell).Text(m.MedicationName);
-                table.Cell().Element(BodyCell).Text($"{m.DoseValue} {lookups.DoseUnits.GetValueOrDefault(m.DoseUnitId, "")}".Trim());
-                table.Cell().Element(BodyCell).Text(lookups.Routes.GetValueOrDefault(m.RouteId, "—"));
-                table.Cell().Element(BodyCell).Text(m.FrequencyId.HasValue ? lookups.Frequencies.GetValueOrDefault(m.FrequencyId.Value, "—") : "—");
-                table.Cell().Element(BodyCell).Text(m.FormulationId.HasValue ? lookups.Formulations.GetValueOrDefault(m.FormulationId.Value, "—") : "—");
+                table.Cell().Element(BodyCell).Text(m.MedicationName).FontSize(8.5f);
+                table.Cell().Element(BodyCell).Text($"{m.DoseValue} {lookups.DoseUnits.GetValueOrDefault(m.DoseUnitId, "")}".Trim()).FontSize(8.5f);
+                table.Cell().Element(BodyCell).Text(lookups.Routes.GetValueOrDefault(m.RouteId, "—")).FontSize(8.5f);
+                table.Cell().Element(BodyCell).Text(m.FrequencyId.HasValue ? lookups.Frequencies.GetValueOrDefault(m.FrequencyId.Value, "—") : "—").FontSize(8.5f);
+                table.Cell().Element(BodyCell).Text(m.FormulationId.HasValue ? lookups.Formulations.GetValueOrDefault(m.FormulationId.Value, "—") : "—").FontSize(8.5f);
             }
         });
     }
 
     private static IContainer HeaderCell(IContainer container) =>
-        container.Background(RowTint).Padding(6).BorderBottom(0.6f).BorderColor(Border);
+        container.Background(RowTint).Padding(6).Border(0.6f).BorderColor(Border);
 
     private static IContainer BodyCell(IContainer container) =>
         container.Padding(6).Border(0.6f).BorderColor(Border);
