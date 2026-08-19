@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using MedSafe.Infrastructure.Data;
+using MedSafeAPI.Services;
 
 namespace MedSafeAPI.BackgroundServices;
 
@@ -42,7 +43,8 @@ public class AlertMonitorService : BackgroundService
         {
             using var scope = _scopeFactory.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-            await CheckOverdueAssessmentsAsync(db, cancellationToken);
+            var alertTriggerService = scope.ServiceProvider.GetRequiredService<IAlertTriggerService>();
+            await CheckOverdueAssessmentsAsync(db, alertTriggerService, cancellationToken);
         }
         catch (Exception ex)
         {
@@ -53,7 +55,7 @@ public class AlertMonitorService : BackgroundService
     // AR-005: Report awaiting review > 48 hours.
     // Assigned reviewer (IncidentReportReviews.ReviewerUserId) gets reminded;
     // if no reviewer is assigned, active Admins get the fallback notification.
-    private async Task CheckOverdueAssessmentsAsync(AppDbContext db, CancellationToken cancellationToken)
+    private async Task CheckOverdueAssessmentsAsync(AppDbContext db, IAlertTriggerService alertTriggerService, CancellationToken cancellationToken)
     {
         var now = DateTime.UtcNow;
         var cutoff = now.AddHours(-48);
@@ -116,12 +118,6 @@ public class AlertMonitorService : BackgroundService
         if (reminderUrgency == null)
             return;
 
-        var emailMethodId = await db.NotificationMethods
-            .AsNoTracking()
-            .Where(x => x.Code == "EMAIL" && x.IsActive)
-            .Select(x => (int?)x.Id)
-            .SingleOrDefaultAsync(cancellationToken);
-
         var reviewerIds = reviewerByReport.Values.Distinct().ToList();
         var reviewers = await db.Users
             .AsNoTracking()
@@ -129,87 +125,52 @@ public class AlertMonitorService : BackgroundService
             .Select(x => new { x.Id, x.Name })
             .ToDictionaryAsync(x => x.Id, x => x.Name, cancellationToken);
 
-        var existing = await db.IncidentNotifications
-            .AsNoTracking()
-            .Where(x => reportIds.Contains(x.IncidentReportId) && x.AlertRuleId == rule.Id && x.RecipientUserId != null)
-            .Select(x => new { x.IncidentReportId, RecipientUserId = x.RecipientUserId!.Value })
-            .ToListAsync(cancellationToken);
-
-        var existingKeys = existing
-            .Select(x => $"{x.IncidentReportId}:{x.RecipientUserId}")
-            .ToHashSet();
-
         var createdCount = 0;
 
         foreach (var report in overdueReports)
         {
             if (reviewerByReport.TryGetValue(report.Id, out var reviewerUserId))
             {
-                if (!reviewers.TryGetValue(reviewerUserId, out var reviewerName))
+                if (!reviewers.ContainsKey(reviewerUserId))
                     continue;
 
-                var key = $"{report.Id}:{reviewerUserId}";
-                if (existingKeys.Contains(key))
-                    continue;
-
-                db.IncidentNotifications.Add(new MedSafe.Models.IncidentNotification
+                var triggerId = await alertTriggerService.CreateAsync(new CreateAlertTriggerCommand
                 {
-                    IncidentReportId = report.Id,
                     AlertRuleId = rule.Id,
-                    RecipientUserId = reviewerUserId,
-                    NotificationTypeId = assignedReviewerTypeId,
+                    IncidentReportId = report.Id,
                     UrgencyId = reminderUrgency.Id,
-                    NotificationMethodId = emailMethodId,
-                    Status = "PENDING",
-                    PersonName = reviewerName,
+                    TriggerSource = "SCHEDULED_48H",
+                    ConditionSummary = "Report awaiting review for more than 48 hours",
+                    DedupeKey = $"REVIEW_48H:{rule.Id}:{report.Id}",
                     Title = ReminderTitle,
                     Message = $"Report {report.IncidentReportNumber} has been awaiting assessment for more than 48 hours.",
-                    IsAutomatic = true,
-                    IsRead = false,
-                    NotifiedAt = now,
-                    CreatedDate = now,
-                    CreatedBy = systemCreatedByUserId.Value
-                });
-                existingKeys.Add(key);
-                createdCount++;
+                    CreatedByUserId = systemCreatedByUserId.Value,
+                    Recipients = [new AlertTriggerRecipientCommand { UserId = reviewerUserId, RecipientTypeId = assignedReviewerTypeId }]
+                }, cancellationToken);
+
+                if (triggerId.HasValue) createdCount++;
             }
             else
             {
-                foreach (var admin in admins)
+                var triggerId = await alertTriggerService.CreateAsync(new CreateAlertTriggerCommand
                 {
-                    var key = $"{report.Id}:{admin.Id}";
-                    if (existingKeys.Contains(key))
-                        continue;
+                    AlertRuleId = rule.Id,
+                    IncidentReportId = report.Id,
+                    UrgencyId = reminderUrgency.Id,
+                    TriggerSource = "SCHEDULED_48H",
+                    ConditionSummary = "Report awaiting review for more than 48 hours, no assigned reviewer",
+                    DedupeKey = $"REVIEW_48H:{rule.Id}:{report.Id}",
+                    Title = UnassignedTitle,
+                    Message = $"Report {report.IncidentReportNumber} has been pending for more than 48 hours and has no assigned reviewer.",
+                    CreatedByUserId = systemCreatedByUserId.Value,
+                    Recipients = admins.Select(admin => new AlertTriggerRecipientCommand { UserId = admin.Id, RecipientTypeId = administratorTypeId }).ToList()
+                }, cancellationToken);
 
-                    db.IncidentNotifications.Add(new MedSafe.Models.IncidentNotification
-                    {
-                        IncidentReportId = report.Id,
-                        AlertRuleId = rule.Id,
-                        RecipientUserId = admin.Id,
-                        NotificationTypeId = administratorTypeId,
-                        UrgencyId = reminderUrgency.Id,
-                        NotificationMethodId = emailMethodId,
-                        Status = "PENDING",
-                        PersonName = admin.Name,
-                        Title = UnassignedTitle,
-                        Message = $"Report {report.IncidentReportNumber} has been pending for more than 48 hours and has no assigned reviewer.",
-                        IsAutomatic = true,
-                        IsRead = false,
-                        NotifiedAt = now,
-                        CreatedDate = now,
-                        CreatedBy = systemCreatedByUserId.Value
-                    });
-                    existingKeys.Add(key);
-                    createdCount++;
-                }
+                if (triggerId.HasValue) createdCount++;
             }
         }
 
-        if (createdCount == 0)
-            return;
-
-        rule.LastTriggered = now;
-        await db.SaveChangesAsync(cancellationToken);
-        _logger.LogInformation("AR-005 created {Count} overdue assessment notifications.", createdCount);
+        if (createdCount > 0)
+            _logger.LogInformation("AR-005 created {Count} overdue assessment alert triggers.", createdCount);
     }
 }

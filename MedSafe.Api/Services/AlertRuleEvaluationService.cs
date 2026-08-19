@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using MedSafe.Infrastructure.Data;
 using MedSafe.Models;
@@ -6,16 +7,19 @@ namespace MedSafeAPI.Services;
 
 // Runs automatically after an incident report is successfully committed — no
 // dedicated frontend API. Loads every enabled dynamic Alert Rule, evaluates its
-// conditions (ALL/ANY match mode) against the just-submitted report, and creates
-// one IncidentNotification per configured recipient for every rule that matches.
+// conditions (ALL/ANY match mode) against the just-submitted report, and — for
+// every rule that matches — records one AlertTriggerHistory (via
+// IAlertTriggerService) plus one IncidentNotification per configured recipient.
 public class AlertRuleEvaluationService : IAlertRuleEvaluationService
 {
     private readonly AppDbContext _db;
+    private readonly IAlertTriggerService _alertTriggerService;
     private readonly ILogger<AlertRuleEvaluationService> _logger;
 
-    public AlertRuleEvaluationService(AppDbContext db, ILogger<AlertRuleEvaluationService> logger)
+    public AlertRuleEvaluationService(AppDbContext db, IAlertTriggerService alertTriggerService, ILogger<AlertRuleEvaluationService> logger)
     {
         _db = db;
+        _alertTriggerService = alertTriggerService;
         _logger = logger;
     }
 
@@ -32,11 +36,6 @@ public class AlertRuleEvaluationService : IAlertRuleEvaluationService
             _logger.LogWarning("Alert evaluation skipped because incident {IncidentId} was not found.", incidentReportId);
             return;
         }
-
-        var emailMethodId = await _db.NotificationMethods
-            .Where(x => x.Code == "EMAIL" && x.IsActive)
-            .Select(x => (int?)x.Id)
-            .SingleOrDefaultAsync(cancellationToken);
 
         // MatchModeId != null skips legacy rules that don't use the new dynamic
         // condition-builder structure yet.
@@ -55,83 +54,145 @@ public class AlertRuleEvaluationService : IAlertRuleEvaluationService
             if (rule.Conditions.Count == 0)
                 continue;
 
-            var results = rule.Conditions.Select(condition => EvaluateCondition(report, condition)).ToList();
-            var matched = rule.MatchMode?.Code == "ANY" ? results.Any(x => x) : results.All(x => x);
+            var results = new List<ConditionEvaluationResult>();
+            foreach (var condition in rule.Conditions)
+                results.Add(await EvaluateConditionAsync(report, condition, _db, cancellationToken));
 
+            var matched = rule.MatchMode?.Code == "ANY" ? results.Any(x => x.Matched) : results.All(x => x.Matched);
             if (!matched)
                 continue;
 
-            await CreateNotificationsAsync(report, rule, emailMethodId, cancellationToken);
-            rule.LastTriggered = DateTime.UtcNow;
-        }
+            var recipients = rule.Recipients
+                .Where(x => x.IsActive)
+                .GroupBy(x => x.RecipientUserId)
+                .Select(x => new AlertTriggerRecipientCommand { UserId = x.Key, RecipientTypeId = x.First().RecipientTypeId })
+                .ToList();
 
-        await _db.SaveChangesAsync(cancellationToken);
-    }
-
-    private async Task CreateNotificationsAsync(IncidentReport report, AlertRule rule, int? emailMethodId, CancellationToken cancellationToken)
-    {
-        var recipients = rule.Recipients
-            .Where(x => x.IsActive)
-            .GroupBy(x => x.RecipientUserId)
-            .Select(x => x.First())
-            .ToList();
-
-        if (recipients.Count == 0)
-            return;
-
-        var existingRecipientIds = await _db.IncidentNotifications
-            .Where(x => x.IncidentReportId == report.Id && x.AlertRuleId == rule.Id && x.RecipientUserId != null)
-            .Select(x => x.RecipientUserId!.Value)
-            .ToListAsync(cancellationToken);
-        var existingSet = existingRecipientIds.ToHashSet();
-
-        foreach (var recipient in recipients)
-        {
-            if (existingSet.Contains(recipient.RecipientUserId))
+            if (recipients.Count == 0)
                 continue;
 
-            var now = DateTime.UtcNow;
-            _db.IncidentNotifications.Add(new IncidentNotification
+            await _alertTriggerService.CreateAsync(new CreateAlertTriggerCommand
             {
-                IncidentReportId = report.Id,
                 AlertRuleId = rule.Id,
-                RecipientUserId = recipient.RecipientUserId,
-                NotificationTypeId = recipient.RecipientTypeId,
+                IncidentReportId = report.Id,
                 UrgencyId = rule.UrgencyId,
-                NotificationMethodId = emailMethodId,
-                Status = "PENDING",
-                PersonName = recipient.RecipientUser.Name,
-                Title = rule.NotificationTitle,
-                Message = rule.NotificationMessage,
-                IsAutomatic = true,
-                IsRead = false,
-                ReadAt = null,
-                NotifiedAt = now,
-                // Current schema requires CreatedBy — use the report submitter.
-                CreatedBy = report.SubmittedByUserId,
-                CreatedDate = now
-            });
+                TriggerSource = "REPORT_SUBMISSION",
+                DedupeKey = $"REPORT_SUBMISSION:{rule.Id}:{report.Id}",
+                ConditionSummary = BuildConditionSummary(results, rule.MatchMode?.Code),
+                MatchedConditionSnapshot = JsonSerializer.Serialize(results),
+                Title = rule.NotificationTitle ?? "Medication Safety Alert",
+                Message = rule.NotificationMessage ?? string.Empty,
+                CreatedByUserId = report.SubmittedByUserId,
+                Recipients = recipients
+            }, cancellationToken);
         }
     }
 
-    private static bool EvaluateCondition(IncidentReport report, AlertRuleCondition condition)
+    private static string BuildConditionSummary(List<ConditionEvaluationResult> results, string? matchModeCode)
+    {
+        var parts = results.Select(r => $"{r.FieldName} {FriendlyOperator(r.OperatorCode)} {r.ExpectedValue}");
+        var joiner = matchModeCode == "ANY" ? " OR " : " AND ";
+        return string.Join(joiner, parts);
+    }
+
+    private static string FriendlyOperator(string operatorCode) => operatorCode switch
+    {
+        "EQUALS" => "=",
+        "NOT_EQUALS" => "!=",
+        "IN" => "IN",
+        "NOT_IN" => "NOT IN",
+        "AT_LEAST" => ">=",
+        "AT_MOST" => "<=",
+        "CONTAINS_ANY" => "CONTAINS ANY OF",
+        "CONTAINS_ALL" => "CONTAINS ALL OF",
+        _ => operatorCode
+    };
+
+    private static async Task<ConditionEvaluationResult> EvaluateConditionAsync(IncidentReport report, AlertRuleCondition condition, AppDbContext db, CancellationToken cancellationToken)
     {
         var fieldCode = condition.ConditionField.Code;
         var operatorCode = condition.Operator.Code;
-
-        return fieldCode switch
+        var result = new ConditionEvaluationResult
         {
-            "REPORT_TYPE" => EvaluateText(report.ReportType, operatorCode, condition),
-            "HARM_LEVEL" => EvaluateHarmLevel(report.HarmLevelCode, operatorCode, condition),
-            "ERROR_CATEGORY" => EvaluateLookup(report.ErrorCategoryId, operatorCode, condition),
-            "STAGE_OF_PROCESS" => EvaluateLookup(report.StageOfProcessId, operatorCode, condition),
-            "PATIENT_OUTCOME" => EvaluateLookup(report.PatientOutcomeId, operatorCode, condition),
-            "SERIOUSNESS_CRITERIA" => EvaluateMultiLookup(report.SeriousnessCriteria.Select(x => x.SeriousnessCriterionId), operatorCode, condition),
-            "CONTRIBUTING_FACTOR" => EvaluateMultiLookup(report.ContributingFactors.Select(x => x.ContributingFactorId), operatorCode, condition),
-            "INCIDENT_LOCATION" => EvaluateText(report.IncidentLocation, operatorCode, condition),
-            "SUSPECTED_CAUSALITY" => EvaluateText(report.SuspectedCausality, operatorCode, condition),
-            _ => false
+            FieldCode = fieldCode,
+            FieldName = condition.ConditionField.Name,
+            OperatorCode = operatorCode,
         };
+
+        switch (fieldCode)
+        {
+            case "REPORT_TYPE":
+                result.ActualValue = report.ReportType;
+                result.ExpectedValue = JoinText(condition);
+                result.Matched = EvaluateText(report.ReportType, operatorCode, condition);
+                break;
+            case "HARM_LEVEL":
+                result.ActualValue = report.HarmLevelCode;
+                result.ExpectedValue = JoinText(condition);
+                result.Matched = EvaluateHarmLevel(report.HarmLevelCode, operatorCode, condition);
+                break;
+            case "ERROR_CATEGORY":
+                result.ActualValue = await ResolveActualLabelAsync(db, fieldCode, report.ErrorCategoryId, cancellationToken);
+                result.ExpectedValue = await JoinLookupLabelsAsync(db, fieldCode, condition, cancellationToken);
+                result.Matched = EvaluateLookup(report.ErrorCategoryId, operatorCode, condition);
+                break;
+            case "STAGE_OF_PROCESS":
+                result.ActualValue = await ResolveActualLabelAsync(db, fieldCode, report.StageOfProcessId, cancellationToken);
+                result.ExpectedValue = await JoinLookupLabelsAsync(db, fieldCode, condition, cancellationToken);
+                result.Matched = EvaluateLookup(report.StageOfProcessId, operatorCode, condition);
+                break;
+            case "PATIENT_OUTCOME":
+                result.ActualValue = await ResolveActualLabelAsync(db, fieldCode, report.PatientOutcomeId, cancellationToken);
+                result.ExpectedValue = await JoinLookupLabelsAsync(db, fieldCode, condition, cancellationToken);
+                result.Matched = EvaluateLookup(report.PatientOutcomeId, operatorCode, condition);
+                break;
+            case "SERIOUSNESS_CRITERIA":
+                result.ActualValue = await JoinLookupLabelsAsync(db, fieldCode, report.SeriousnessCriteria.Select(x => x.SeriousnessCriterionId), cancellationToken);
+                result.ExpectedValue = await JoinLookupLabelsAsync(db, fieldCode, condition, cancellationToken);
+                result.Matched = EvaluateMultiLookup(report.SeriousnessCriteria.Select(x => x.SeriousnessCriterionId), operatorCode, condition);
+                break;
+            case "CONTRIBUTING_FACTOR":
+                result.ActualValue = await JoinLookupLabelsAsync(db, fieldCode, report.ContributingFactors.Select(x => x.ContributingFactorId), cancellationToken);
+                result.ExpectedValue = await JoinLookupLabelsAsync(db, fieldCode, condition, cancellationToken);
+                result.Matched = EvaluateMultiLookup(report.ContributingFactors.Select(x => x.ContributingFactorId), operatorCode, condition);
+                break;
+            case "INCIDENT_LOCATION":
+                result.ActualValue = report.IncidentLocation;
+                result.ExpectedValue = JoinText(condition);
+                result.Matched = EvaluateText(report.IncidentLocation, operatorCode, condition);
+                break;
+            case "SUSPECTED_CAUSALITY":
+                result.ActualValue = report.SuspectedCausality;
+                result.ExpectedValue = JoinText(condition);
+                result.Matched = EvaluateText(report.SuspectedCausality, operatorCode, condition);
+                break;
+            default:
+                result.ExpectedValue = JoinText(condition);
+                result.Matched = false;
+                break;
+        }
+
+        return result;
+    }
+
+    private static string JoinText(AlertRuleCondition condition) =>
+        string.Join(", ", condition.Values.Select(v => v.TextValue ?? v.LookupValueId?.ToString() ?? string.Empty));
+
+    private static async Task<string?> ResolveActualLabelAsync(AppDbContext db, string fieldCode, int? id, CancellationToken cancellationToken)
+    {
+        if (!id.HasValue) return null;
+        return await AlertConditionLabelResolver.ResolveNameAsync(db, fieldCode, id.Value, cancellationToken) ?? id.Value.ToString();
+    }
+
+    private static async Task<string> JoinLookupLabelsAsync(AppDbContext db, string fieldCode, AlertRuleCondition condition, CancellationToken cancellationToken) =>
+        await JoinLookupLabelsAsync(db, fieldCode, condition.Values.Where(v => v.LookupValueId.HasValue).Select(v => v.LookupValueId!.Value), cancellationToken);
+
+    private static async Task<string> JoinLookupLabelsAsync(AppDbContext db, string fieldCode, IEnumerable<int> ids, CancellationToken cancellationToken)
+    {
+        var labels = new List<string>();
+        foreach (var id in ids)
+            labels.Add(await AlertConditionLabelResolver.ResolveNameAsync(db, fieldCode, id, cancellationToken) ?? id.ToString());
+        return string.Join(", ", labels);
     }
 
     // Handles REPORT_TYPE, INCIDENT_LOCATION, SUSPECTED_CAUSALITY.

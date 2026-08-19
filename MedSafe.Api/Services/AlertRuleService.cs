@@ -291,12 +291,12 @@ public class AlertRuleService : IAlertRuleService
             .Include(r => r.NotificationUrgency)
             .CountAsync(r => !r.IsDeleted && r.NotificationUrgency != null && r.NotificationUrgency.Code == CriticalUrgencyCode, cancellationToken);
 
-        // No dedicated trigger-event log yet (that's part of the evaluation engine,
-        // not built yet) — this counts distinct rules last triggered in the last
-        // 24h, the closest available proxy on the current schema.
+        // Real trigger-event count (AlertTriggerHistory), not a proxy off
+        // AlertRules.LastTriggered — a rule that fires 15 times today now
+        // correctly counts as 15, not 1.
         var since = DateTime.UtcNow.AddHours(-24);
-        var triggeredLast24h = await _db.AlertRules
-            .CountAsync(r => !r.IsDeleted && r.LastTriggered != null && r.LastTriggered >= since, cancellationToken);
+        var triggeredLast24h = await _db.AlertTriggerHistories
+            .CountAsync(t => t.TriggeredAt >= since, cancellationToken);
 
         return new AlertRuleSummaryDto
         {

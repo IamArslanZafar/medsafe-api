@@ -14,6 +14,9 @@ public class IncidentNotification
 
     // ── Alert Rule automatic-notification fields ──
     public int? AlertRuleId { get; set; }
+    // Which single AlertTriggerHistory this per-recipient email fanned out from —
+    // null for rows created before AlertTriggerHistory existed.
+    public long? AlertTriggerId { get; set; }
     public int? RecipientUserId { get; set; }
     public int? UrgencyId { get; set; }
     public string? Title { get; set; }
@@ -32,6 +35,7 @@ public class IncidentNotification
 
     public IncidentReport IncidentReport { get; set; } = null!;
     public AlertRule? AlertRule { get; set; }
+    public AlertTriggerHistory? AlertTrigger { get; set; }
     public User? RecipientUser { get; set; }
     public NotificationUrgency? Urgency { get; set; }
     public NotificationMethod? NotificationMethod { get; set; }

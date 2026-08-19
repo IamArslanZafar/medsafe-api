@@ -30,6 +30,8 @@ builder.Services.AddScoped<IIncidentReportReviewService, IncidentReportReviewSer
 builder.Services.AddScoped<IDashboardService, DashboardService>();
 builder.Services.AddScoped<IAlertRuleService, AlertRuleService>();
 builder.Services.AddScoped<IAlertRuleEvaluationService, AlertRuleEvaluationService>();
+builder.Services.AddScoped<IAlertTriggerService, AlertTriggerService>();
+builder.Services.AddScoped<IAlertDashboardService, AlertDashboardService>();
 builder.Services.AddScoped<INotificationService, NotificationService>();
 builder.Services.Configure<EmailOptions>(builder.Configuration.GetSection(EmailOptions.SectionName));
 builder.Services.AddScoped<IEmailService, EmailService>();

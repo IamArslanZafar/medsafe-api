@@ -15,13 +15,11 @@ public class EmailNotificationWorker : BackgroundService
     private static readonly string[] UrgentCodes = ["IMMEDIATE", "ESCALATED"];
 
     private readonly IServiceScopeFactory _scopeFactory;
-    private readonly IConfiguration _configuration;
     private readonly ILogger<EmailNotificationWorker> _logger;
 
-    public EmailNotificationWorker(IServiceScopeFactory scopeFactory, IConfiguration configuration, ILogger<EmailNotificationWorker> logger)
+    public EmailNotificationWorker(IServiceScopeFactory scopeFactory, ILogger<EmailNotificationWorker> logger)
     {
         _scopeFactory = scopeFactory;
-        _configuration = configuration;
         _logger = logger;
     }
 
@@ -75,8 +73,6 @@ public class EmailNotificationWorker : BackgroundService
         if (notifications.Count == 0)
             return;
 
-        var baseUrl = _configuration["Frontend:BaseUrl"]?.TrimEnd('/') ?? "";
-
         foreach (var notification in notifications)
         {
             notification.EmailAttemptCount++;
@@ -102,7 +98,7 @@ public class EmailNotificationWorker : BackgroundService
                     ToName = notification.PersonName,
                     Subject = subject,
                     HtmlBody = BuildEmailBody(notification.PersonName, report.IncidentReportNumber, report.ReportType,
-                        notification.Urgency?.Name ?? "Normal", report.ReportStatus, report.SubmittedAt, baseUrl, report.Id),
+                        notification.Urgency?.Name ?? "Normal", report.ReportStatus, report.SubmittedAt),
                     Attachments =
                     [
                         new EmailAttachment { FileName = pdfFileName, ContentType = "application/pdf", Content = pdfBytes }
@@ -127,10 +123,8 @@ public class EmailNotificationWorker : BackgroundService
     }
 
     private static string BuildEmailBody(string recipientName, string reportNumber, string reportType, string urgency,
-        string reportStatus, DateTime submittedAt, string baseUrl, int reportId)
+        string reportStatus, DateTime submittedAt)
     {
-        var reportUrl = string.IsNullOrWhiteSpace(baseUrl) ? reportNumber : $"{baseUrl}/reports/{reportId}";
-
         return $"""
             <div style="font-family:Arial,sans-serif;font-size:14px;color:#1e293b;line-height:1.6;">
               <p>Dear {recipientName},</p>
@@ -143,9 +137,7 @@ public class EmailNotificationWorker : BackgroundService
                 <li><strong>Status:</strong> {reportStatus}</li>
                 <li><strong>Submitted On:</strong> {submittedAt:dd MMM yyyy, HH:mm} UTC</li>
               </ul>
-              <p>A PDF copy of the report is attached for your reference.</p>
-              <p>Please sign in to QTCMRS to review the report and complete the required action:<br/>
-              <strong>{reportUrl}</strong></p>
+              <p>A PDF copy of the report is attached for your reference. Please sign in to QTCMRS to review the report and complete the required action.</p>
               <h4>Confidentiality Notice</h4>
               <p>This email and its attachment contain confidential clinical information and are intended only for the authorized recipient. Please do not forward, share, or distribute this information outside the approved clinical workflow.</p>
               <p>If you have received this email in error, please notify the system administrator and delete the email and attachment.</p>

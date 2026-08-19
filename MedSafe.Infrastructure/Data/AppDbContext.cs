@@ -19,6 +19,7 @@ public class AppDbContext : DbContext
     public DbSet<AlertRuleCondition> AlertRuleConditions => Set<AlertRuleCondition>();
     public DbSet<AlertRuleConditionValue> AlertRuleConditionValues => Set<AlertRuleConditionValue>();
     public DbSet<AlertRuleRecipient> AlertRuleRecipients => Set<AlertRuleRecipient>();
+    public DbSet<AlertTriggerHistory> AlertTriggerHistories => Set<AlertTriggerHistory>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
     public DbSet<Feedback> Feedbacks => Set<Feedback>();
     public DbSet<DropdownDefinition> DropdownDefinitions => Set<DropdownDefinition>();
@@ -169,6 +170,8 @@ public class AppDbContext : DbContext
             .ToTable("AlertRuleConditionValue", tb => tb.ExcludeFromMigrations());
         modelBuilder.Entity<AlertRuleRecipient>()
             .ToTable("AlertRuleRecipient", tb => tb.ExcludeFromMigrations());
+        modelBuilder.Entity<AlertTriggerHistory>()
+            .ToTable("AlertTriggerHistory", tb => tb.ExcludeFromMigrations());
 
         modelBuilder.Entity<AlertConditionFieldOperator>()
             .HasKey(x => new { x.ConditionFieldId, x.OperatorId });
@@ -405,6 +408,69 @@ public class AppDbContext : DbContext
         modelBuilder.Entity<IncidentNotification>()
             .HasIndex(n => new { n.RecipientUserId, n.IsRead, n.CreatedDate });
 
+        // AlertTriggerHistory — one row per rule match, fanning out to the
+        // per-recipient IncidentNotification rows below it. Table/FKs/indexes were
+        // added directly via SQL script, same ExcludeFromMigrations convention.
+        modelBuilder.Entity<AlertTriggerHistory>()
+            .HasOne(x => x.AlertRule)
+            .WithMany()
+            .HasForeignKey(x => x.AlertRuleId)
+            .HasConstraintName("FK_AlertTriggerHistory_AlertRule")
+            .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<AlertTriggerHistory>()
+            .HasOne(x => x.IncidentReport)
+            .WithMany()
+            .HasForeignKey(x => x.IncidentReportId)
+            .HasConstraintName("FK_AlertTriggerHistory_IncidentReport")
+            .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<AlertTriggerHistory>()
+            .HasOne(x => x.Urgency)
+            .WithMany()
+            .HasForeignKey(x => x.UrgencyId)
+            .HasConstraintName("FK_AlertTriggerHistory_Urgency")
+            .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<AlertTriggerHistory>()
+            .HasOne(x => x.AcknowledgedByUser)
+            .WithMany()
+            .HasForeignKey(x => x.AcknowledgedByUserId)
+            .HasConstraintName("FK_AlertTriggerHistory_AcknowledgedBy")
+            .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<AlertTriggerHistory>()
+            .HasOne(x => x.ResolvedByUser)
+            .WithMany()
+            .HasForeignKey(x => x.ResolvedByUserId)
+            .HasConstraintName("FK_AlertTriggerHistory_ResolvedBy")
+            .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<AlertTriggerHistory>()
+            .HasIndex(x => x.AlertTriggerNumber).IsUnique();
+
+        modelBuilder.Entity<AlertTriggerHistory>()
+            .HasIndex(x => x.DedupeKey).IsUnique();
+
+        modelBuilder.Entity<AlertTriggerHistory>()
+            .HasIndex(x => x.TriggeredAt);
+
+        modelBuilder.Entity<AlertTriggerHistory>()
+            .HasIndex(x => new { x.Status, x.TriggeredAt });
+
+        modelBuilder.Entity<AlertTriggerHistory>()
+            .HasIndex(x => new { x.AlertRuleId, x.TriggeredAt });
+
+        modelBuilder.Entity<IncidentNotification>()
+            .HasOne(n => n.AlertTrigger)
+            .WithMany(x => x.Notifications)
+            .HasForeignKey(n => n.AlertTriggerId)
+            .HasConstraintName("FK_IncidentNotifications_AlertTriggerHistory")
+            .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<IncidentNotification>()
+            .HasIndex(n => n.AlertTriggerId);
+
         modelBuilder.Entity<IncidentReportReview>()
             .HasOne(r => r.IncidentReport)
             .WithOne(i => i.Review)
@@ -520,6 +586,15 @@ public class AppDbContext : DbContext
             entity.Property(e => e.PersonName).HasMaxLength(200);
             entity.Property(e => e.Status).HasMaxLength(50);
             entity.Property(e => e.Notes).HasMaxLength(1000);
+        });
+
+        modelBuilder.Entity<AlertTriggerHistory>(entity =>
+        {
+            entity.Property(e => e.AlertTriggerNumber).HasMaxLength(40);
+            entity.Property(e => e.TriggerSource).HasMaxLength(50);
+            entity.Property(e => e.ConditionSummary).HasMaxLength(1000);
+            entity.Property(e => e.Status).HasMaxLength(30);
+            entity.Property(e => e.DedupeKey).HasMaxLength(250);
         });
 
         modelBuilder.Entity<NotificationRecipientType>(entity =>
