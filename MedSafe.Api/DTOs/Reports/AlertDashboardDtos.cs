@@ -30,6 +30,22 @@ public sealed class NotificationChannelCountDto
     public int Count { get; set; }
 }
 
+public sealed class AlertUrgencyCountDto
+{
+    public int UrgencyId { get; set; }
+    public string Code { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
+    public int Count { get; set; }
+}
+
+public sealed class AlertTopRecipientDto
+{
+    public int UserId { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public string? Email { get; set; }
+    public int Count { get; set; }
+}
+
 public sealed class AlertDashboardOverviewDto
 {
     public int TotalRules { get; set; }
@@ -42,6 +58,8 @@ public sealed class AlertDashboardOverviewDto
     public List<AlertStatusCountDto> AlertsByStatus { get; set; } = [];
     public List<AlertRuleCountDto> AlertsByRule { get; set; } = [];
     public List<NotificationChannelCountDto> NotificationsByChannel { get; set; } = [];
+    public List<AlertUrgencyCountDto> AlertsByUrgency { get; set; } = [];
+    public List<AlertTopRecipientDto> TopRecipients { get; set; } = [];
 }
 
 // ── Trigger table ──

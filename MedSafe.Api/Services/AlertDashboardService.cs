@@ -76,6 +76,22 @@ public class AlertDashboardService : IAlertDashboardService
             .Select(g => new NotificationChannelCountDto { MethodCode = g.Key.Code, MethodName = g.Key.Name, Count = g.Count() })
             .ToListAsync(cancellationToken);
 
+        var alertsByUrgency = await triggersInRange
+            .Where(x => x.Urgency != null)
+            .GroupBy(x => new { x.UrgencyId, x.Urgency!.Code, x.Urgency.Name })
+            .Select(g => new AlertUrgencyCountDto { UrgencyId = g.Key.UrgencyId!.Value, Code = g.Key.Code, Name = g.Key.Name, Count = g.Count() })
+            .OrderByDescending(x => x.Count)
+            .ToListAsync(cancellationToken);
+
+        var topRecipients = await _db.IncidentNotifications
+            .Where(x => x.AlertTriggerId != null && x.RecipientUserId != null
+                && x.AlertTrigger!.TriggeredAt >= fromDate && x.AlertTrigger.TriggeredAt < rangeEndExclusive)
+            .GroupBy(x => new { x.RecipientUserId, x.RecipientUser!.Name, x.RecipientUser.Email })
+            .Select(g => new AlertTopRecipientDto { UserId = g.Key.RecipientUserId!.Value, Name = g.Key.Name, Email = g.Key.Email, Count = g.Count() })
+            .OrderByDescending(x => x.Count)
+            .Take(5)
+            .ToListAsync(cancellationToken);
+
         return new AlertDashboardOverviewDto
         {
             TotalRules = totalRules,
@@ -87,7 +103,9 @@ public class AlertDashboardService : IAlertDashboardService
             AlertsOverTime = alertsOverTime,
             AlertsByStatus = alertsByStatus,
             AlertsByRule = alertsByRule,
-            NotificationsByChannel = notificationsByChannel
+            NotificationsByChannel = notificationsByChannel,
+            AlertsByUrgency = alertsByUrgency,
+            TopRecipients = topRecipients
         };
     }
 
