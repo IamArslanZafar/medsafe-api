@@ -53,6 +53,7 @@ public class ErrorCategoriesController : ControllerBase
             Description = dto.Description,
             IsActive = dto.IsActive,
             DisplayOrder = nextOrder,
+            StageOfProcessId = dto.StageOfProcessId,
             CreatedBy = CurrentUserId() ?? 0,
             CreatedDate = DateTime.UtcNow
         };
@@ -76,6 +77,7 @@ public class ErrorCategoriesController : ControllerBase
         category.Description = dto.Description;
         category.IsActive = dto.IsActive;
         if (dto.DisplayOrder.HasValue) category.DisplayOrder = dto.DisplayOrder.Value;
+        category.StageOfProcessId = dto.StageOfProcessId;
         category.ModifiedBy = CurrentUserId();
         category.ModifiedDate = DateTime.UtcNow;
 
@@ -132,6 +134,7 @@ public class ErrorCategoriesController : ControllerBase
         Name = c.Name,
         Description = c.Description,
         IsActive = c.IsActive,
-        DisplayOrder = c.DisplayOrder
+        DisplayOrder = c.DisplayOrder,
+        StageOfProcessId = c.StageOfProcessId
     };
 }

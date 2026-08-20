@@ -8,8 +8,8 @@ namespace MedSafeAPI.Services;
 
 public class IncidentReportService : IIncidentReportService
 {
-    private static readonly string[] ValidHarmLevels = ["A", "B", "C", "D", "E", "F", "G", "H", "I"];
-    private static readonly string[] ErrorStyleReportTypes = ["Medication Error", "Near Miss"];
+    private const string MedicationErrorCode = "MEDICATION_ERROR";
+    private const string AdrCode = "ADR";
 
     private readonly AppDbContext _db;
     private readonly ICurrentUserService _currentUser;
@@ -30,9 +30,9 @@ public class IncidentReportService : IIncidentReportService
 
     public async Task<SubmitIncidentReportResponse> SubmitAsync(SubmitIncidentReportRequest request, CancellationToken cancellationToken)
     {
-        await ValidateRequestAsync(request, cancellationToken);
+        var reportType = await ValidateRequestAsync(request, cancellationToken);
 
-        var incident = BuildIncidentReport(request);
+        var incident = await BuildIncidentReport(request, reportType, cancellationToken);
 
         await using var transaction = await _db.Database.BeginTransactionAsync(cancellationToken);
         try
@@ -44,7 +44,14 @@ public class IncidentReportService : IIncidentReportService
             AddAllergies(incident.Id, request.KnownAllergyIds);
             AddCurrentMedications(incident.Id, request.CurrentMedicationIds);
             AddContributingFactors(incident.Id, request.ContributingFactorIds);
-            AddSeriousnessCriteria(incident.Id, request.SeriousnessCriterionIds);
+            AddHealthcareProfessionals(incident.Id, request.OtherHealthcareProfessionals);
+
+            if (reportType.Code == AdrCode)
+            {
+                AddSeriousnessCriteria(incident.Id, request.SeriousnessCriterionIds);
+                AddConcomitantMedications(incident.Id, request.ConcomitantMedications);
+            }
+
             AddInitialStatusHistory(incident.Id);
             await _db.SaveChangesAsync(cancellationToken);
 
@@ -91,9 +98,11 @@ public class IncidentReportService : IIncidentReportService
             .Include(r => r.AllergyLinks)
             .Include(r => r.CurrentMedicationLinks)
             .Include(r => r.Attachments)
+            .Include(r => r.ConcomitantMedications)
+            .Include(r => r.HealthcareProfessionals)
             .FirstOrDefaultAsync(r => r.Id == id, cancellationToken);
 
-        return report == null ? null : MapToDto(report);
+        return report == null ? null : await MapToDtoAsync(report, cancellationToken);
     }
 
     public async Task<bool> CanCurrentUserAccessAsync(int incidentReportId, CancellationToken cancellationToken)
@@ -128,10 +137,15 @@ public class IncidentReportService : IIncidentReportService
             .Include(r => r.AllergyLinks)
             .Include(r => r.CurrentMedicationLinks)
             .Include(r => r.Attachments)
+            .Include(r => r.ConcomitantMedications)
+            .Include(r => r.HealthcareProfessionals)
             .OrderByDescending(r => r.SubmittedAt)
             .ToListAsync(cancellationToken);
 
-        return reports.Select(MapToDto).ToList();
+        var results = new List<IncidentReportDto>();
+        foreach (var report in reports)
+            results.Add(await MapToDtoAsync(report, cancellationToken));
+        return results;
     }
 
     public async Task<IncidentReportSummaryDto> GetSummaryAsync(IncidentReportListRequest request, CancellationToken cancellationToken)
@@ -226,7 +240,7 @@ public class IncidentReportService : IIncidentReportService
         return query;
     }
 
-    private async Task ValidateRequestAsync(SubmitIncidentReportRequest request, CancellationToken cancellationToken)
+    private async Task<ReportType> ValidateRequestAsync(SubmitIncidentReportRequest request, CancellationToken cancellationToken)
     {
         // Step 1 - Patient
         if (string.IsNullOrWhiteSpace(request.PatientName))
@@ -244,6 +258,18 @@ public class IncidentReportService : IIncidentReportService
         if (request.PatientWeightKg is <= 0)
             throw new ValidationException("Patient weight must be greater than zero.");
 
+        // Report type — resolved first, everything else branches on it.
+        var reportType = await _db.ReportTypes
+            .FirstOrDefaultAsync(x => x.Id == request.ReportTypeId && x.IsActive, cancellationToken);
+
+        if (reportType == null)
+            throw new ValidationException("Invalid report type.");
+
+        if (reportType.Code != MedicationErrorCode && reportType.Code != AdrCode)
+            throw new ValidationException("Unsupported report type.");
+
+        var isMedicationError = reportType.Code == MedicationErrorCode;
+
         // Step 2 - Medications
         if (request.Medications.Count == 0)
             throw new ValidationException("At least one medication is required.");
@@ -253,16 +279,27 @@ public class IncidentReportService : IIncidentReportService
             if (string.IsNullOrWhiteSpace(medication.MedicationName))
                 throw new ValidationException("Medication name is required.");
 
-            if (medication.DoseValue <= 0)
-                throw new ValidationException("Dose must be greater than zero.");
+            if (isMedicationError)
+            {
+                if (!medication.DoseValue.HasValue || medication.DoseValue <= 0)
+                    throw new ValidationException("Medication dose is required.");
 
-            if (medication.MedicationGivenAt == default)
-                throw new ValidationException("Medication date/time is required.");
+                if (!medication.DoseUnitId.HasValue)
+                    throw new ValidationException("Dose unit is required.");
 
-            if (!await _db.DoseUnits.AnyAsync(x => x.Id == medication.DoseUnitId && x.IsActive, cancellationToken))
+                if (!medication.RouteId.HasValue)
+                    throw new ValidationException("Route is required.");
+
+                if (!medication.MedicationGivenAt.HasValue)
+                    throw new ValidationException("Medication date/time is required.");
+            }
+
+            if (medication.DoseUnitId.HasValue &&
+                !await _db.DoseUnits.AnyAsync(x => x.Id == medication.DoseUnitId && x.IsActive, cancellationToken))
                 throw new ValidationException("Invalid dose unit.");
 
-            if (!await _db.Routes.AnyAsync(x => x.Id == medication.RouteId && x.IsActive, cancellationToken))
+            if (medication.RouteId.HasValue &&
+                !await _db.Routes.AnyAsync(x => x.Id == medication.RouteId && x.IsActive, cancellationToken))
                 throw new ValidationException("Invalid route.");
 
             if (medication.FrequencyId.HasValue &&
@@ -272,29 +309,43 @@ public class IncidentReportService : IIncidentReportService
             if (medication.FormulationId.HasValue &&
                 !await _db.Formulations.AnyAsync(x => x.Id == medication.FormulationId && x.IsActive, cancellationToken))
                 throw new ValidationException("Invalid formulation.");
+
+            if (medication.TherapyStartAt.HasValue && medication.TherapyStopAt.HasValue &&
+                medication.TherapyStopAt < medication.TherapyStartAt)
+                throw new ValidationException("Therapy stop date cannot be before therapy start date.");
         }
 
-        // Step 3 - Incident / harm
-        if (!ValidHarmLevels.Contains(request.HarmLevelCode?.ToUpperInvariant()))
-            throw new ValidationException("Invalid harm level.");
-
-        if (ErrorStyleReportTypes.Contains(request.ReportType))
+        // Step 3 - Incident / harm (report-type specific)
+        if (isMedicationError)
         {
+            if (!request.HarmLevelId.HasValue)
+                throw new ValidationException("NCC MERP harm level is required.");
+
+            if (!await _db.HarmLevels.AnyAsync(x => x.Id == request.HarmLevelId.Value && x.IsActive, cancellationToken))
+                throw new ValidationException("Invalid harm level.");
+
             if (!request.ErrorCategoryId.HasValue)
                 throw new ValidationException("Error category is required.");
+
             if (!request.StageOfProcessId.HasValue)
                 throw new ValidationException("Stage of process is required.");
         }
-        else if (request.ReportType == "ADR")
-        {
-            if (string.IsNullOrWhiteSpace(request.AdrReactionDescription))
-                throw new ValidationException("Reaction description is required for ADR.");
-            if (string.IsNullOrWhiteSpace(request.SuspectedCausality))
-                throw new ValidationException("Suspected causality is required for ADR.");
-        }
         else
         {
-            throw new ValidationException("Invalid report type.");
+            if (!request.AdrSeverityId.HasValue)
+                throw new ValidationException("ADR severity is required.");
+
+            if (!await _db.AdrSeverities.AnyAsync(x => x.Id == request.AdrSeverityId.Value && x.IsActive, cancellationToken))
+                throw new ValidationException("Invalid ADR severity.");
+
+            if (!request.SuspectedCausalityId.HasValue)
+                throw new ValidationException("WHO-UMC suspected causality is required.");
+
+            if (!await _db.SuspectedCausalities.AnyAsync(x => x.Id == request.SuspectedCausalityId.Value && x.IsActive, cancellationToken))
+                throw new ValidationException("Invalid suspected causality.");
+
+            if (string.IsNullOrWhiteSpace(request.AdrReactionDescription))
+                throw new ValidationException("ADR reaction description is required.");
         }
 
         if (request.ErrorCategoryId.HasValue &&
@@ -308,15 +359,34 @@ public class IncidentReportService : IIncidentReportService
         if (request.IncidentOccurredAt == default)
             throw new ValidationException("Incident date and time is required.");
 
-        if (string.IsNullOrWhiteSpace(request.IncidentLocation))
-            throw new ValidationException("Incident location / unit is required.");
+        if (!await _db.UnitDepartments.AnyAsync(x => x.Id == request.IncidentUnitId && x.IsActive, cancellationToken))
+            throw new ValidationException("Invalid incident location / unit.");
+
+        if (request.SectionId.HasValue &&
+            !await _db.Sections.AnyAsync(x => x.Id == request.SectionId && x.UnitDepartmentId == request.IncidentUnitId && x.IsActive, cancellationToken))
+            throw new ValidationException("Invalid section for the selected unit / department.");
+
+        if (request.ReportedIncidentSeverityId.HasValue &&
+            !await _db.ReportedIncidentSeverities.AnyAsync(x => x.Id == request.ReportedIncidentSeverityId && x.IsActive, cancellationToken))
+            throw new ValidationException("Invalid reported incident severity.");
+
+        if (!isMedicationError && request.ReactionStartAt.HasValue && request.ReactionStoppedAt.HasValue &&
+            request.ReactionStoppedAt < request.ReactionStartAt)
+            throw new ValidationException("Reaction stop time cannot be before reaction start time.");
 
         if (string.IsNullOrWhiteSpace(request.IncidentNarrative))
             throw new ValidationException("Incident narrative is required.");
 
-        // Step 4 - Outcome
+        // Step 4 - Outcome / reporter / visit
         if (!await _db.PatientOutcomes.AnyAsync(x => x.Id == request.PatientOutcomeId && x.IsActive, cancellationToken))
             throw new ValidationException("Invalid patient outcome.");
+
+        if (!await _db.VisitTypes.AnyAsync(x => x.Id == request.VisitTypeId && x.IsActive, cancellationToken))
+            throw new ValidationException("Invalid visit type.");
+
+        if (request.ReportingSourceId.HasValue &&
+            !await _db.ReportingSources.AnyAsync(x => x.Id == request.ReportingSourceId && x.IsActive, cancellationToken))
+            throw new ValidationException("Invalid reporting source.");
 
         // Multi-select lookups
         var contributingFactorIds = request.ContributingFactorIds.Distinct().ToList();
@@ -328,13 +398,33 @@ public class IncidentReportService : IIncidentReportService
                 throw new ValidationException("One or more contributing factors are invalid.");
         }
 
-        var seriousnessCriterionIds = request.SeriousnessCriterionIds.Distinct().ToList();
-        if (seriousnessCriterionIds.Count > 0)
+        if (isMedicationError)
         {
-            var validCount = await _db.SeriousnessCriteria
-                .CountAsync(x => seriousnessCriterionIds.Contains(x.Id) && x.IsActive, cancellationToken);
-            if (validCount != seriousnessCriterionIds.Count)
-                throw new ValidationException("One or more seriousness criteria are invalid.");
+            if (request.SeriousnessCriterionIds.Count > 0)
+                throw new ValidationException("Seriousness criteria only apply to ADR reports.");
+            if (request.ConcomitantMedications.Count > 0)
+                throw new ValidationException("Concomitant medications only apply to ADR reports.");
+        }
+        else
+        {
+            var seriousnessCriterionIds = request.SeriousnessCriterionIds.Distinct().ToList();
+            if (seriousnessCriterionIds.Count > 0)
+            {
+                var validCount = await _db.SeriousnessCriteria
+                    .CountAsync(x => seriousnessCriterionIds.Contains(x.Id) && x.IsActive, cancellationToken);
+                if (validCount != seriousnessCriterionIds.Count)
+                    throw new ValidationException("One or more seriousness criteria are invalid.");
+            }
+
+            foreach (var item in request.ConcomitantMedications)
+            {
+                var careSetting = item.CareSettingCode?.Trim().ToUpperInvariant();
+                if (careSetting is not ("INPATIENT" or "OUTPATIENT"))
+                    throw new ValidationException("Invalid concomitant medication care setting.");
+
+                if (string.IsNullOrWhiteSpace(item.MedicationText))
+                    throw new ValidationException("Concomitant medication is required.");
+            }
         }
 
         var allergyIds = request.KnownAllergyIds.Distinct().ToList();
@@ -364,10 +454,38 @@ public class IncidentReportService : IIncidentReportService
             x => x.Id == request.PositionId && x.ProfessionId == request.ProfessionId && x.IsActive, cancellationToken);
         if (!validPosition)
             throw new ValidationException("Invalid position for selected profession.");
+
+        // Other Healthcare Professionals
+        foreach (var professional in request.OtherHealthcareProfessionals)
+        {
+            if (string.IsNullOrWhiteSpace(professional.Name))
+                throw new ValidationException("Other healthcare professional name is required.");
+
+            if (!await _db.Professions.AnyAsync(x => x.Id == professional.ProfessionId && x.IsActive, cancellationToken))
+                throw new ValidationException("Invalid profession for other healthcare professional.");
+
+            if (!await _db.Positions.AnyAsync(
+                x => x.Id == professional.PositionId && x.ProfessionId == professional.ProfessionId && x.IsActive, cancellationToken))
+                throw new ValidationException("Invalid position for other healthcare professional.");
+        }
+
+        return reportType;
     }
 
-    private IncidentReport BuildIncidentReport(SubmitIncidentReportRequest request)
+    private async Task<IncidentReport> BuildIncidentReport(SubmitIncidentReportRequest request, ReportType reportType, CancellationToken cancellationToken)
     {
+        var isMedicationError = reportType.Code == MedicationErrorCode;
+
+        var harmLevel = isMedicationError && request.HarmLevelId.HasValue
+            ? await _db.HarmLevels.FirstOrDefaultAsync(x => x.Id == request.HarmLevelId.Value, cancellationToken)
+            : null;
+
+        var causality = !isMedicationError && request.SuspectedCausalityId.HasValue
+            ? await _db.SuspectedCausalities.FirstOrDefaultAsync(x => x.Id == request.SuspectedCausalityId.Value, cancellationToken)
+            : null;
+
+        var unit = await _db.UnitDepartments.FirstAsync(x => x.Id == request.IncidentUnitId, cancellationToken);
+
         return new IncidentReport
         {
             // System generated
@@ -384,16 +502,36 @@ public class IncidentReportService : IIncidentReportService
             PatientAge = request.PatientAge,
             PatientSex = request.PatientSex.Trim(),
             PatientWeightKg = request.PatientWeightKg,
+            RelevantMedicalHistory = request.RelevantMedicalHistory?.Trim(),
+            AdmissionDate = request.AdmissionDate,
+            CurrentDiagnosis = request.CurrentDiagnosis?.Trim(),
 
-            // Step 3
-            ReportType = request.ReportType.Trim(),
-            ErrorCategoryId = request.ErrorCategoryId,
-            StageOfProcessId = request.StageOfProcessId,
-            AdrReactionDescription = request.AdrReactionDescription?.Trim(),
-            SuspectedCausality = request.SuspectedCausality?.Trim(),
-            HarmLevelCode = request.HarmLevelCode.Trim().ToUpperInvariant(),
+            // Lookup ids
+            ReportTypeId = request.ReportTypeId,
+            HarmLevelId = isMedicationError ? request.HarmLevelId : null,
+            AdrSeverityId = !isMedicationError ? request.AdrSeverityId : null,
+            SuspectedCausalityId = !isMedicationError ? request.SuspectedCausalityId : null,
+            ErrorCategoryId = isMedicationError ? request.ErrorCategoryId : null,
+            StageOfProcessId = isMedicationError ? request.StageOfProcessId : null,
+            AdrReactionDescription = !isMedicationError ? request.AdrReactionDescription?.Trim() : null,
+            AdrAdditionalInformation = !isMedicationError ? request.AdrAdditionalInformation?.Trim() : null,
+            ReactionStartAt = !isMedicationError ? request.ReactionStartAt : null,
+            ReactionStoppedAt = !isMedicationError ? request.ReactionStoppedAt : null,
+            IncidentUnitId = request.IncidentUnitId,
+            SectionId = request.SectionId,
+            VisitTypeId = request.VisitTypeId,
+            ReportingSourceId = request.ReportingSourceId,
+            ReportedIncidentSeverityId = request.ReportedIncidentSeverityId,
+            IsResearchStudyRelated = request.IsResearchStudyRelated,
+
+            // Legacy dual-write — AlertRuleEvaluationService/DashboardService/Report Hub
+            // filters still read these string snapshots directly (see IncidentReport comment).
+            ReportType = isMedicationError ? "Medication Error" : "ADR",
+            HarmLevelCode = isMedicationError ? harmLevel?.Code : null,
+            SuspectedCausality = !isMedicationError ? causality?.Name : null,
+            IncidentLocation = unit.Name,
+
             IncidentOccurredAt = request.IncidentOccurredAt,
-            IncidentLocation = request.IncidentLocation.Trim(),
             IncidentNarrative = request.IncidentNarrative.Trim(),
             PatientOutcomeId = request.PatientOutcomeId,
 
@@ -415,12 +553,51 @@ public class IncidentReportService : IIncidentReportService
             {
                 IncidentReportId = incidentReportId,
                 MedicationName = medication.MedicationName.Trim(),
+                GenericName = medication.GenericName?.Trim(),
+                DrugClass = medication.DrugClass?.Trim(),
                 DoseValue = medication.DoseValue,
                 DoseUnitId = medication.DoseUnitId,
                 RouteId = medication.RouteId,
                 FrequencyId = medication.FrequencyId,
                 FormulationId = medication.FormulationId,
                 MedicationGivenAt = medication.MedicationGivenAt,
+                Manufacturer = medication.Manufacturer?.Trim(),
+                BatchLotNumber = medication.BatchLotNumber?.Trim(),
+                TherapyStartAt = medication.TherapyStartAt,
+                TherapyStopAt = medication.TherapyStopAt,
+                ExpiryDate = medication.ExpiryDate,
+                CreatedBy = _currentUser.UserId,
+                CreatedDate = DateTime.UtcNow
+            });
+        }
+    }
+
+    private void AddConcomitantMedications(int incidentReportId, List<ConcomitantMedicationRequest> medications)
+    {
+        foreach (var medication in medications)
+        {
+            _db.IncidentReportConcomitantMedications.Add(new IncidentReportConcomitantMedication
+            {
+                IncidentReportId = incidentReportId,
+                CareSettingCode = medication.CareSettingCode.Trim().ToUpperInvariant(),
+                MedicationText = medication.MedicationText.Trim(),
+                CreatedBy = _currentUser.UserId,
+                CreatedDate = DateTime.UtcNow
+            });
+        }
+    }
+
+    private void AddHealthcareProfessionals(int incidentReportId, List<HealthcareProfessionalRequest> professionals)
+    {
+        foreach (var professional in professionals)
+        {
+            _db.IncidentReportHealthcareProfessionals.Add(new IncidentReportHealthcareProfessional
+            {
+                IncidentReportId = incidentReportId,
+                Name = professional.Name.Trim(),
+                ProfessionId = professional.ProfessionId,
+                PositionId = professional.PositionId,
+                ContactNumber = professional.ContactNumber?.Trim(),
                 CreatedBy = _currentUser.UserId,
                 CreatedDate = DateTime.UtcNow
             });
@@ -516,57 +693,136 @@ public class IncidentReportService : IIncidentReportService
         return $"IR-{DateTime.UtcNow:yyyyMMdd}-{uniquePart}";
     }
 
-    private static IncidentReportDto MapToDto(IncidentReport r) => new()
+    private async Task<IncidentReportDto> MapToDtoAsync(IncidentReport r, CancellationToken cancellationToken)
     {
-        Id = r.Id,
-        IncidentReportNumber = r.IncidentReportNumber,
-        SubmittedAt = r.SubmittedAt,
-        SubmittedByUserId = r.SubmittedByUserId,
-        SubmittedByRole = r.SubmittedByRole,
-        ReportStatus = r.ReportStatus,
-        PatientReferenceToken = r.PatientReferenceToken,
-        PatientReference = r.PatientReference,
-        PatientName = r.PatientName,
-        PatientAge = r.PatientAge,
-        PatientSex = r.PatientSex,
-        PatientWeightKg = r.PatientWeightKg,
-        KnownAllergyIds = r.AllergyLinks.Select(a => a.AllergyId).ToList(),
-        CurrentMedicationIds = r.CurrentMedicationLinks.Select(m => m.CurrentMedicationId).ToList(),
-        Medications = r.Medications.Select(m => new IncidentMedicationDto
+        // Small, cheap point lookups for the readable *Name fields — these tables
+        // are tiny (single-digit to low-hundreds rows) so no caching needed.
+        var reportTypeName = r.ReportTypeId.HasValue
+            ? await _db.ReportTypes.Where(x => x.Id == r.ReportTypeId).Select(x => x.Name).FirstOrDefaultAsync(cancellationToken)
+            : null;
+        var harmLevelName = r.HarmLevelId.HasValue
+            ? await _db.HarmLevels.Where(x => x.Id == r.HarmLevelId).Select(x => x.Name).FirstOrDefaultAsync(cancellationToken)
+            : null;
+        var adrSeverityName = r.AdrSeverityId.HasValue
+            ? await _db.AdrSeverities.Where(x => x.Id == r.AdrSeverityId).Select(x => x.Name).FirstOrDefaultAsync(cancellationToken)
+            : null;
+        var causalityName = r.SuspectedCausalityId.HasValue
+            ? await _db.SuspectedCausalities.Where(x => x.Id == r.SuspectedCausalityId).Select(x => x.Name).FirstOrDefaultAsync(cancellationToken)
+            : null;
+        var unitName = r.IncidentUnitId.HasValue
+            ? await _db.UnitDepartments.Where(x => x.Id == r.IncidentUnitId).Select(x => x.Name).FirstOrDefaultAsync(cancellationToken)
+            : null;
+        var visitTypeName = r.VisitTypeId.HasValue
+            ? await _db.VisitTypes.Where(x => x.Id == r.VisitTypeId).Select(x => x.Name).FirstOrDefaultAsync(cancellationToken)
+            : null;
+        var reportingSourceName = r.ReportingSourceId.HasValue
+            ? await _db.ReportingSources.Where(x => x.Id == r.ReportingSourceId).Select(x => x.Name).FirstOrDefaultAsync(cancellationToken)
+            : null;
+        var sectionName = r.SectionId.HasValue
+            ? await _db.Sections.Where(x => x.Id == r.SectionId).Select(x => x.Name).FirstOrDefaultAsync(cancellationToken)
+            : null;
+        var reportedIncidentSeverityName = r.ReportedIncidentSeverityId.HasValue
+            ? await _db.ReportedIncidentSeverities.Where(x => x.Id == r.ReportedIncidentSeverityId).Select(x => x.Name).FirstOrDefaultAsync(cancellationToken)
+            : null;
+
+        return new IncidentReportDto
         {
-            Id = m.Id,
-            MedicationName = m.MedicationName,
-            DoseValue = m.DoseValue,
-            DoseUnitId = m.DoseUnitId,
-            RouteId = m.RouteId,
-            FrequencyId = m.FrequencyId,
-            FormulationId = m.FormulationId,
-            MedicationGivenAt = m.MedicationGivenAt
-        }).ToList(),
-        ReportType = r.ReportType,
-        ErrorCategoryId = r.ErrorCategoryId,
-        StageOfProcessId = r.StageOfProcessId,
-        AdrReactionDescription = r.AdrReactionDescription,
-        SuspectedCausality = r.SuspectedCausality,
-        HarmLevelCode = r.HarmLevelCode,
-        IncidentOccurredAt = r.IncidentOccurredAt,
-        IncidentLocation = r.IncidentLocation,
-        IncidentNarrative = r.IncidentNarrative,
-        ContributingFactorIds = r.ContributingFactors.Select(f => f.ContributingFactorId).ToList(),
-        SeriousnessCriterionIds = r.SeriousnessCriteria.Select(c => c.SeriousnessCriterionId).ToList(),
-        ProfessionId = r.ProfessionId,
-        PositionId = r.PositionId,
-        ImmediateActionTaken = r.ImmediateActionTaken,
-        PatientOutcomeId = r.PatientOutcomeId,
-        PatientOutcomeDetails = r.PatientOutcomeDetails,
-        Attachments = r.Attachments.Where(a => !a.IsDeleted).Select(a => new IncidentReportAttachmentDto
-        {
-            Id = a.Id,
-            OriginalFileName = a.OriginalFileName,
-            ContentType = a.ContentType,
-            FileSizeBytes = a.FileSizeBytes,
-            UploadedAt = a.UploadedAt,
-            UploadedByUserId = a.UploadedByUserId
-        }).ToList()
-    };
+            Id = r.Id,
+            IncidentReportNumber = r.IncidentReportNumber,
+            SubmittedAt = r.SubmittedAt,
+            SubmittedByUserId = r.SubmittedByUserId,
+            SubmittedByRole = r.SubmittedByRole,
+            ReportStatus = r.ReportStatus,
+            PatientReferenceToken = r.PatientReferenceToken,
+            PatientReference = r.PatientReference,
+            PatientName = r.PatientName,
+            PatientAge = r.PatientAge,
+            PatientSex = r.PatientSex,
+            PatientWeightKg = r.PatientWeightKg,
+            RelevantMedicalHistory = r.RelevantMedicalHistory,
+            AdmissionDate = r.AdmissionDate,
+            CurrentDiagnosis = r.CurrentDiagnosis,
+            KnownAllergyIds = r.AllergyLinks.Select(a => a.AllergyId).ToList(),
+            CurrentMedicationIds = r.CurrentMedicationLinks.Select(m => m.CurrentMedicationId).ToList(),
+            Medications = r.Medications.Select(m => new IncidentMedicationDto
+            {
+                Id = m.Id,
+                MedicationName = m.MedicationName,
+                GenericName = m.GenericName,
+                DrugClass = m.DrugClass,
+                DoseValue = m.DoseValue,
+                DoseUnitId = m.DoseUnitId,
+                RouteId = m.RouteId,
+                FrequencyId = m.FrequencyId,
+                FormulationId = m.FormulationId,
+                MedicationGivenAt = m.MedicationGivenAt,
+                Manufacturer = m.Manufacturer,
+                BatchLotNumber = m.BatchLotNumber,
+                TherapyStartAt = m.TherapyStartAt,
+                TherapyStopAt = m.TherapyStopAt,
+                ExpiryDate = m.ExpiryDate
+            }).ToList(),
+            ConcomitantMedications = r.ConcomitantMedications.Select(c => new ConcomitantMedicationDto
+            {
+                Id = c.Id,
+                CareSettingCode = c.CareSettingCode,
+                MedicationText = c.MedicationText
+            }).ToList(),
+            ReportType = r.ReportType,
+            HarmLevelCode = r.HarmLevelCode,
+            SuspectedCausality = r.SuspectedCausality,
+            IncidentLocation = r.IncidentLocation,
+            ReportTypeId = r.ReportTypeId ?? 0,
+            HarmLevelId = r.HarmLevelId,
+            AdrSeverityId = r.AdrSeverityId,
+            SuspectedCausalityId = r.SuspectedCausalityId,
+            IncidentUnitId = r.IncidentUnitId ?? 0,
+            SectionId = r.SectionId,
+            VisitTypeId = r.VisitTypeId ?? 0,
+            ReportingSourceId = r.ReportingSourceId,
+            ReportedIncidentSeverityId = r.ReportedIncidentSeverityId,
+            ReportTypeName = reportTypeName,
+            HarmLevelName = harmLevelName,
+            AdrSeverityName = adrSeverityName,
+            SuspectedCausalityName = causalityName,
+            IncidentUnitName = unitName,
+            SectionName = sectionName,
+            VisitTypeName = visitTypeName,
+            ReportingSourceName = reportingSourceName,
+            ReportedIncidentSeverityName = reportedIncidentSeverityName,
+            ErrorCategoryId = r.ErrorCategoryId,
+            StageOfProcessId = r.StageOfProcessId,
+            AdrReactionDescription = r.AdrReactionDescription,
+            AdrAdditionalInformation = r.AdrAdditionalInformation,
+            ReactionStartAt = r.ReactionStartAt,
+            ReactionStoppedAt = r.ReactionStoppedAt,
+            IsResearchStudyRelated = r.IsResearchStudyRelated,
+            IncidentOccurredAt = r.IncidentOccurredAt,
+            IncidentNarrative = r.IncidentNarrative,
+            ContributingFactorIds = r.ContributingFactors.Select(f => f.ContributingFactorId).ToList(),
+            SeriousnessCriterionIds = r.SeriousnessCriteria.Select(c => c.SeriousnessCriterionId).ToList(),
+            ProfessionId = r.ProfessionId,
+            PositionId = r.PositionId,
+            OtherHealthcareProfessionals = r.HealthcareProfessionals.Select(p => new HealthcareProfessionalDto
+            {
+                Id = p.Id,
+                Name = p.Name,
+                ProfessionId = p.ProfessionId,
+                PositionId = p.PositionId,
+                ContactNumber = p.ContactNumber
+            }).ToList(),
+            ImmediateActionTaken = r.ImmediateActionTaken,
+            PatientOutcomeId = r.PatientOutcomeId,
+            PatientOutcomeDetails = r.PatientOutcomeDetails,
+            Attachments = r.Attachments.Where(a => !a.IsDeleted).Select(a => new IncidentReportAttachmentDto
+            {
+                Id = a.Id,
+                OriginalFileName = a.OriginalFileName,
+                ContentType = a.ContentType,
+                FileSizeBytes = a.FileSizeBytes,
+                UploadedAt = a.UploadedAt,
+                UploadedByUserId = a.UploadedByUserId
+            }).ToList()
+        };
+    }
 }

@@ -2,28 +2,26 @@ using System.ComponentModel.DataAnnotations;
 
 namespace MedSafeAPI.DTOs;
 
-public class ErrorCategoryDto
+public class VisitTypeDto
 {
     public int Id { get; set; }
+    public string Code { get; set; } = string.Empty;
     public string Name { get; set; } = string.Empty;
     public string? Description { get; set; }
     public bool IsActive { get; set; }
     public int DisplayOrder { get; set; }
-    // Null = applies at any Stage of Process. A value scopes this category to
-    // only show once that stage is picked on the form.
-    public int? StageOfProcessId { get; set; }
 }
 
-public class ErrorCategoryUpsertDto
+public class VisitTypeUpsertDto
 {
+    [Required] public string Code { get; set; } = string.Empty;
     [Required] public string Name { get; set; } = string.Empty;
     public string? Description { get; set; }
     public bool IsActive { get; set; } = true;
     public int? DisplayOrder { get; set; }
-    public int? StageOfProcessId { get; set; }
 }
 
-public class ErrorCategoryBulkDeleteDto
+public class VisitTypeBulkDeleteDto
 {
     [Required] public List<int> Ids { get; set; } = new();
 }

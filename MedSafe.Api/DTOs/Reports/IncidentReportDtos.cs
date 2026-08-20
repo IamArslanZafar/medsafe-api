@@ -4,37 +4,69 @@ namespace MedSafeAPI.DTOs;
 
 public sealed class SubmitIncidentReportRequest
 {
-    // STEP 1
+    // =====================================================
+    // STEP 1 - PATIENT / DEMOGRAPHICS
+    // =====================================================
     public string PatientName { get; set; } = string.Empty;
     public string PatientRef { get; set; } = string.Empty;
     public short PatientAge { get; set; }
     public string PatientSex { get; set; } = string.Empty;
     public decimal? PatientWeightKg { get; set; }
+    public string? RelevantMedicalHistory { get; set; }
+    public DateTime? AdmissionDate { get; set; }
+    public string? CurrentDiagnosis { get; set; }
     public List<int> KnownAllergyIds { get; set; } = [];
     public List<int> CurrentMedicationIds { get; set; } = [];
 
-    // STEP 2
+    // =====================================================
+    // STEP 2 - MEDICATIONS
+    // =====================================================
     public List<IncidentMedicationRequest> Medications { get; set; } = [];
 
-    // STEP 3
-    public string ReportType { get; set; } = string.Empty;
+    // ADR only
+    public List<ConcomitantMedicationRequest> ConcomitantMedications { get; set; } = [];
+
+    // =====================================================
+    // STEP 3 - INCIDENT / ADR ASSESSMENT
+    // =====================================================
+    public int ReportTypeId { get; set; }
+
+    // Medication Error only
+    public int? HarmLevelId { get; set; }
     public int? ErrorCategoryId { get; set; }
     public int? StageOfProcessId { get; set; }
-    public string? AdrReactionDescription { get; set; }
-    public string? SuspectedCausality { get; set; }
-    public string HarmLevelCode { get; set; } = string.Empty;
-    public DateTime IncidentOccurredAt { get; set; }
-    public string IncidentLocation { get; set; } = string.Empty;
-    public string IncidentNarrative { get; set; } = string.Empty;
-    public List<int> ContributingFactorIds { get; set; } = [];
-    public List<int> SeriousnessCriterionIds { get; set; } = [];
-    public int PatientOutcomeId { get; set; }
 
-    // STEP 4
+    // ADR only
+    public int? AdrSeverityId { get; set; }
+    public int? SuspectedCausalityId { get; set; }
+    public string? AdrReactionDescription { get; set; }
+    public string? AdrAdditionalInformation { get; set; }
+    public List<int> SeriousnessCriterionIds { get; set; } = [];
+    public DateTime? ReactionStartAt { get; set; }
+    public DateTime? ReactionStoppedAt { get; set; }
+
+    // Common
+    public List<int> ContributingFactorIds { get; set; } = [];
+    public DateTime IncidentOccurredAt { get; set; }
+    public int IncidentUnitId { get; set; }
+    public int? SectionId { get; set; }
+    public int PatientOutcomeId { get; set; }
+    public string IncidentNarrative { get; set; } = string.Empty;
+    public int? ReportedIncidentSeverityId { get; set; }
+    public bool? IsResearchStudyRelated { get; set; }
+
+    // =====================================================
+    // STEP 4 - REPORTER / VISIT
+    // =====================================================
     public int ProfessionId { get; set; }
     public int PositionId { get; set; }
+    public int VisitTypeId { get; set; }
+    public int? ReportingSourceId { get; set; }
+    public List<HealthcareProfessionalRequest> OtherHealthcareProfessionals { get; set; } = [];
 
-    // STEP 5
+    // =====================================================
+    // STEP 5 - OUTCOME
+    // =====================================================
     public string? ImmediateActionTaken { get; set; }
     public string? PatientOutcomeDetails { get; set; }
 
@@ -45,12 +77,38 @@ public sealed class SubmitIncidentReportRequest
 public sealed class IncidentMedicationRequest
 {
     public string MedicationName { get; set; } = string.Empty;
-    public decimal DoseValue { get; set; }
-    public int DoseUnitId { get; set; }
-    public int RouteId { get; set; }
+    public string? GenericName { get; set; }
+    public string? DrugClass { get; set; }
+
+    // Nullable — required for Medication Error, optional for ADR (validated
+    // conditionally in the service based on report type).
+    public decimal? DoseValue { get; set; }
+    public int? DoseUnitId { get; set; }
+    public int? RouteId { get; set; }
     public int? FrequencyId { get; set; }
     public int? FormulationId { get; set; }
-    public DateTime MedicationGivenAt { get; set; }
+    public DateTime? MedicationGivenAt { get; set; }
+
+    // ADR / client fields
+    public string? Manufacturer { get; set; }
+    public string? BatchLotNumber { get; set; }
+    public DateTime? TherapyStartAt { get; set; }
+    public DateTime? TherapyStopAt { get; set; }
+    public DateOnly? ExpiryDate { get; set; }
+}
+
+public sealed class ConcomitantMedicationRequest
+{
+    public string CareSettingCode { get; set; } = string.Empty; // INPATIENT | OUTPATIENT
+    public string MedicationText { get; set; } = string.Empty;
+}
+
+public sealed class HealthcareProfessionalRequest
+{
+    public string Name { get; set; } = string.Empty;
+    public int ProfessionId { get; set; }
+    public int PositionId { get; set; }
+    public string? ContactNumber { get; set; }
 }
 
 public sealed class SubmitIncidentReportResponse
@@ -77,25 +135,58 @@ public sealed class IncidentReportDto
     public short PatientAge { get; set; }
     public string PatientSex { get; set; } = null!;
     public decimal? PatientWeightKg { get; set; }
+    public string? RelevantMedicalHistory { get; set; }
+    public DateTime? AdmissionDate { get; set; }
+    public string? CurrentDiagnosis { get; set; }
     public List<int> KnownAllergyIds { get; set; } = [];
     public List<int> CurrentMedicationIds { get; set; } = [];
 
     public List<IncidentMedicationDto> Medications { get; set; } = [];
+    public List<ConcomitantMedicationDto> ConcomitantMedications { get; set; } = [];
 
+    // Legacy string snapshots (still populated, see IncidentReport entity comment)
     public string ReportType { get; set; } = null!;
+    public string? HarmLevelCode { get; set; }
+    public string? SuspectedCausality { get; set; }
+    public string IncidentLocation { get; set; } = null!;
+
+    // Lookup ids (new Medication Error / ADR schema)
+    public int ReportTypeId { get; set; }
+    public int? HarmLevelId { get; set; }
+    public int? AdrSeverityId { get; set; }
+    public int? SuspectedCausalityId { get; set; }
+    public int IncidentUnitId { get; set; }
+    public int? SectionId { get; set; }
+    public int VisitTypeId { get; set; }
+    public int? ReportingSourceId { get; set; }
+    public int? ReportedIncidentSeverityId { get; set; }
+
+    // Readable lookup names — saves the frontend a second round trip for the detail view.
+    public string? ReportTypeName { get; set; }
+    public string? HarmLevelName { get; set; }
+    public string? AdrSeverityName { get; set; }
+    public string? SuspectedCausalityName { get; set; }
+    public string? IncidentUnitName { get; set; }
+    public string? SectionName { get; set; }
+    public string? VisitTypeName { get; set; }
+    public string? ReportingSourceName { get; set; }
+    public string? ReportedIncidentSeverityName { get; set; }
+
     public int? ErrorCategoryId { get; set; }
     public int? StageOfProcessId { get; set; }
     public string? AdrReactionDescription { get; set; }
-    public string? SuspectedCausality { get; set; }
-    public string HarmLevelCode { get; set; } = null!;
+    public string? AdrAdditionalInformation { get; set; }
+    public DateTime? ReactionStartAt { get; set; }
+    public DateTime? ReactionStoppedAt { get; set; }
+    public bool? IsResearchStudyRelated { get; set; }
     public DateTime IncidentOccurredAt { get; set; }
-    public string IncidentLocation { get; set; } = null!;
     public string IncidentNarrative { get; set; } = null!;
     public List<int> ContributingFactorIds { get; set; } = [];
     public List<int> SeriousnessCriterionIds { get; set; } = [];
 
     public int? ProfessionId { get; set; }
     public int? PositionId { get; set; }
+    public List<HealthcareProfessionalDto> OtherHealthcareProfessionals { get; set; } = [];
 
     public string? ImmediateActionTaken { get; set; }
     public int PatientOutcomeId { get; set; }
@@ -108,12 +199,35 @@ public sealed class IncidentMedicationDto
 {
     public int Id { get; set; }
     public string MedicationName { get; set; } = null!;
-    public decimal DoseValue { get; set; }
-    public int DoseUnitId { get; set; }
-    public int RouteId { get; set; }
+    public string? GenericName { get; set; }
+    public string? DrugClass { get; set; }
+    public decimal? DoseValue { get; set; }
+    public int? DoseUnitId { get; set; }
+    public int? RouteId { get; set; }
     public int? FrequencyId { get; set; }
     public int? FormulationId { get; set; }
-    public DateTime MedicationGivenAt { get; set; }
+    public DateTime? MedicationGivenAt { get; set; }
+    public string? Manufacturer { get; set; }
+    public string? BatchLotNumber { get; set; }
+    public DateTime? TherapyStartAt { get; set; }
+    public DateTime? TherapyStopAt { get; set; }
+    public DateOnly? ExpiryDate { get; set; }
+}
+
+public sealed class ConcomitantMedicationDto
+{
+    public int Id { get; set; }
+    public string CareSettingCode { get; set; } = null!;
+    public string MedicationText { get; set; } = null!;
+}
+
+public sealed class HealthcareProfessionalDto
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = null!;
+    public int ProfessionId { get; set; }
+    public int PositionId { get; set; }
+    public string? ContactNumber { get; set; }
 }
 
 public sealed class IncidentReportAttachmentDto

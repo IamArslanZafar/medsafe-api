@@ -254,7 +254,7 @@ public class AlertRuleEvaluationService : IAlertRuleEvaluationService
     };
 
     // A < B < C < D < E < F < G < H < I — AT_LEAST/AT_MOST compare rank, not text.
-    private static bool EvaluateHarmLevel(string actualValue, string operatorCode, AlertRuleCondition condition)
+    private static bool EvaluateHarmLevel(string? actualValue, string operatorCode, AlertRuleCondition condition)
     {
         var expectedValues = condition.Values
             .Where(x => !string.IsNullOrWhiteSpace(x.TextValue))
@@ -266,9 +266,9 @@ public class AlertRuleEvaluationService : IAlertRuleEvaluationService
 
         var actualRank = GetHarmRank(actualValue);
         if (actualRank == 0)
-            return false;
+            return false; // covers null actualValue (ADR reports have no HarmLevelCode) — GetHarmRank(null) is 0.
 
-        var actualUpper = actualValue.Trim().ToUpperInvariant();
+        var actualUpper = actualValue!.Trim().ToUpperInvariant();
 
         return operatorCode switch
         {

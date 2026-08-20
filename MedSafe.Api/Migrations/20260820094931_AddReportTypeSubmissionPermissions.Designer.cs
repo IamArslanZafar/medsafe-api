@@ -4,6 +4,7 @@ using MedSafe.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace MedSafeAPI.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260820094931_AddReportTypeSubmissionPermissions")]
+    partial class AddReportTypeSubmissionPermissions
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -2073,14 +2076,6 @@ namespace MedSafeAPI.Migrations
                         },
                         new
                         {
-                            Id = 26,
-                            Name = "View Alert Triggers Dashboard",
-                            ParentId = 8,
-                            PermissionTag = "alert_rules.view_dashboard",
-                            SystemModuleId = 3
-                        },
-                        new
-                        {
                             Id = 11,
                             Name = "Configurations",
                             PermissionTag = "configurations",
@@ -2580,11 +2575,6 @@ namespace MedSafeAPI.Migrations
                         {
                             RoleId = 3,
                             PermissionId = 25
-                        },
-                        new
-                        {
-                            RoleId = 3,
-                            PermissionId = 26
                         },
                         new
                         {

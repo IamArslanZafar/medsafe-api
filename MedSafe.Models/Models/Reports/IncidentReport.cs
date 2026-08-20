@@ -18,18 +18,43 @@ public class IncidentReport
     public short PatientAge { get; set; }
     public string PatientSex { get; set; } = null!;
     public decimal? PatientWeightKg { get; set; }
+    public string? RelevantMedicalHistory { get; set; }
+    public DateTime? AdmissionDate { get; set; }
+    public string? CurrentDiagnosis { get; set; }
 
     // Step 3 - Incident & Harm
+    // Legacy string snapshots — kept and dual-written alongside the FK ids below
+    // because AlertRuleEvaluationService/DashboardService/Report Hub filters still
+    // read these directly. Do not remove until those are migrated to the FK ids.
     public string ReportType { get; set; } = null!;
     public int? ErrorCategoryId { get; set; }
     public int? StageOfProcessId { get; set; }
     public string? AdrReactionDescription { get; set; }
     public string? SuspectedCausality { get; set; }
-    public string HarmLevelCode { get; set; } = null!;
+    public string? HarmLevelCode { get; set; }
     public DateTime IncidentOccurredAt { get; set; }
     public string IncidentLocation { get; set; } = null!;
     public string IncidentNarrative { get; set; } = null!;
     public int PatientOutcomeId { get; set; }
+
+    // Lookup FK ids (new Medication Error / ADR schema)
+    public int? ReportTypeId { get; set; }
+    public int? HarmLevelId { get; set; }
+    public int? SuspectedCausalityId { get; set; }
+    public int? AdrSeverityId { get; set; }
+    public int? IncidentUnitId { get; set; }
+    public int? SectionId { get; set; }
+    public int? VisitTypeId { get; set; }
+    public int? ReportingSourceId { get; set; }
+    public string? AdrAdditionalInformation { get; set; }
+
+    // ADR only — onset/resolution of the reaction itself.
+    public DateTime? ReactionStartAt { get; set; }
+    public DateTime? ReactionStoppedAt { get; set; }
+
+    // Common to both report types.
+    public int? ReportedIncidentSeverityId { get; set; }
+    public bool? IsResearchStudyRelated { get; set; }
 
     // Step 4
     public int? ProfessionId { get; set; }
@@ -47,6 +72,8 @@ public class IncidentReport
     public ICollection<IncidentReportCurrentMedication> CurrentMedicationLinks { get; set; } = new List<IncidentReportCurrentMedication>();
     public ICollection<IncidentReportAttachment> Attachments { get; set; } = new List<IncidentReportAttachment>();
     public ICollection<IncidentNotification> Notifications { get; set; } = new List<IncidentNotification>();
+    public ICollection<IncidentReportConcomitantMedication> ConcomitantMedications { get; set; } = new List<IncidentReportConcomitantMedication>();
+    public ICollection<IncidentReportHealthcareProfessional> HealthcareProfessionals { get; set; } = new List<IncidentReportHealthcareProfessional>();
 
     // Review workflow
     public IncidentReportReview? Review { get; set; }

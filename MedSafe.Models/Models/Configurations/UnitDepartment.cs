@@ -1,18 +1,13 @@
 namespace MedSafe.Models;
 
-public class ErrorCategory
+public class UnitDepartment
 {
     public int Id { get; set; }
+    public string? Code { get; set; }
     public string Name { get; set; } = string.Empty;
     public string? Description { get; set; }
     public bool IsActive { get; set; } = true;
     public int DisplayOrder { get; set; }
-
-    // Null means "applies at any stage" (all pre-existing categories) — a value
-    // here scopes the category to only show once that Stage of Process is picked,
-    // matching the reference form's cascading Stage -> Specific Incident Type.
-    public int? StageOfProcessId { get; set; }
-
     public int CreatedBy { get; set; }
     public DateTime CreatedDate { get; set; } = DateTime.UtcNow;
     public int? ModifiedBy { get; set; }

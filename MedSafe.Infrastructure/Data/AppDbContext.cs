@@ -55,6 +55,19 @@ public class AppDbContext : DbContext
     public DbSet<Permission> Permissions => Set<Permission>();
     public DbSet<RolePermission> RolePermissions => Set<RolePermission>();
 
+    // Medication Error / ADR lookups
+    public DbSet<ReportType> ReportTypes => Set<ReportType>();
+    public DbSet<HarmLevel> HarmLevels => Set<HarmLevel>();
+    public DbSet<SuspectedCausality> SuspectedCausalities => Set<SuspectedCausality>();
+    public DbSet<AdrSeverity> AdrSeverities => Set<AdrSeverity>();
+    public DbSet<VisitType> VisitTypes => Set<VisitType>();
+    public DbSet<ReportingSource> ReportingSources => Set<ReportingSource>();
+    public DbSet<UnitDepartment> UnitDepartments => Set<UnitDepartment>();
+    public DbSet<IncidentReportConcomitantMedication> IncidentReportConcomitantMedications => Set<IncidentReportConcomitantMedication>();
+    public DbSet<IncidentReportHealthcareProfessional> IncidentReportHealthcareProfessionals => Set<IncidentReportHealthcareProfessional>();
+    public DbSet<ReportedIncidentSeverity> ReportedIncidentSeverities => Set<ReportedIncidentSeverity>();
+    public DbSet<Section> Sections => Set<Section>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.Entity<User>()
@@ -150,6 +163,31 @@ public class AppDbContext : DbContext
             .ToTable("IncidentReportReviews", tb => tb.ExcludeFromMigrations());
         modelBuilder.Entity<IncidentReportStatusHistory>()
             .ToTable("IncidentReportStatusHistory", tb => tb.ExcludeFromMigrations());
+
+        // Medication Error / ADR lookup + child tables — added directly on the live
+        // DB via SQL script, same ExcludeFromMigrations convention as everything above.
+        modelBuilder.Entity<ReportType>()
+            .ToTable("ReportType", tb => tb.ExcludeFromMigrations());
+        modelBuilder.Entity<HarmLevel>()
+            .ToTable("HarmLevel", tb => tb.ExcludeFromMigrations());
+        modelBuilder.Entity<SuspectedCausality>()
+            .ToTable("SuspectedCausality", tb => tb.ExcludeFromMigrations());
+        modelBuilder.Entity<AdrSeverity>()
+            .ToTable("AdrSeverity", tb => tb.ExcludeFromMigrations());
+        modelBuilder.Entity<VisitType>()
+            .ToTable("VisitType", tb => tb.ExcludeFromMigrations());
+        modelBuilder.Entity<ReportingSource>()
+            .ToTable("ReportingSource", tb => tb.ExcludeFromMigrations());
+        modelBuilder.Entity<UnitDepartment>()
+            .ToTable("UnitDepartment", tb => tb.ExcludeFromMigrations());
+        modelBuilder.Entity<IncidentReportConcomitantMedication>()
+            .ToTable("IncidentReportConcomitantMedication", tb => tb.ExcludeFromMigrations());
+        modelBuilder.Entity<IncidentReportHealthcareProfessional>()
+            .ToTable("IncidentReportHealthcareProfessional", tb => tb.ExcludeFromMigrations());
+        modelBuilder.Entity<ReportedIncidentSeverity>()
+            .ToTable("ReportedIncidentSeverity", tb => tb.ExcludeFromMigrations());
+        modelBuilder.Entity<Section>()
+            .ToTable("Section", tb => tb.ExcludeFromMigrations());
 
         // Alert rule builder tables (and AlertRule's new columns) were added directly
         // on the live DB via SQL script, same as the IncidentReports rebuild above —
@@ -260,6 +298,109 @@ public class AppDbContext : DbContext
             .HasForeignKey(i => new { i.ProfessionId, i.PositionId })
             .HasPrincipalKey(p => new { p.ProfessionId, p.Id })
             .HasConstraintName("FK_IncidentReports_ProfessionPosition")
+            .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<IncidentReport>()
+            .HasOne<ReportType>()
+            .WithMany()
+            .HasForeignKey(i => i.ReportTypeId)
+            .HasConstraintName("FK_IncidentReports_ReportType")
+            .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<IncidentReport>()
+            .HasOne<HarmLevel>()
+            .WithMany()
+            .HasForeignKey(i => i.HarmLevelId)
+            .HasConstraintName("FK_IncidentReports_HarmLevel")
+            .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<IncidentReport>()
+            .HasOne<SuspectedCausality>()
+            .WithMany()
+            .HasForeignKey(i => i.SuspectedCausalityId)
+            .HasConstraintName("FK_IncidentReports_SuspectedCausality")
+            .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<IncidentReport>()
+            .HasOne<AdrSeverity>()
+            .WithMany()
+            .HasForeignKey(i => i.AdrSeverityId)
+            .HasConstraintName("FK_IncidentReports_AdrSeverity")
+            .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<IncidentReport>()
+            .HasOne<UnitDepartment>()
+            .WithMany()
+            .HasForeignKey(i => i.IncidentUnitId)
+            .HasConstraintName("FK_IncidentReports_IncidentUnit")
+            .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<IncidentReport>()
+            .HasOne<VisitType>()
+            .WithMany()
+            .HasForeignKey(i => i.VisitTypeId)
+            .HasConstraintName("FK_IncidentReports_VisitType")
+            .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<IncidentReport>()
+            .HasOne<ReportingSource>()
+            .WithMany()
+            .HasForeignKey(i => i.ReportingSourceId)
+            .HasConstraintName("FK_IncidentReports_ReportingSource")
+            .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<IncidentReport>()
+            .HasOne<ReportedIncidentSeverity>()
+            .WithMany()
+            .HasForeignKey(i => i.ReportedIncidentSeverityId)
+            .HasConstraintName("FK_IncidentReports_ReportedIncidentSeverity")
+            .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<IncidentReport>()
+            .HasOne<Section>()
+            .WithMany()
+            .HasForeignKey(i => i.SectionId)
+            .HasConstraintName("FK_IncidentReports_Section")
+            .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<ErrorCategory>()
+            .HasOne<StageOfProcess>()
+            .WithMany()
+            .HasForeignKey(e => e.StageOfProcessId)
+            .HasConstraintName("FK_ErrorCategory_StageOfProcess")
+            .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<Section>()
+            .HasOne<UnitDepartment>()
+            .WithMany()
+            .HasForeignKey(s => s.UnitDepartmentId)
+            .HasConstraintName("FK_Section_UnitDepartment")
+            .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<IncidentReportConcomitantMedication>()
+            .HasOne(m => m.IncidentReport)
+            .WithMany(r => r.ConcomitantMedications)
+            .HasForeignKey(m => m.IncidentReportId)
+            .HasConstraintName("FK_IRConcomitantMedication_IncidentReport");
+
+        modelBuilder.Entity<IncidentReportHealthcareProfessional>()
+            .HasOne(p => p.IncidentReport)
+            .WithMany(r => r.HealthcareProfessionals)
+            .HasForeignKey(p => p.IncidentReportId)
+            .HasConstraintName("FK_IRHealthcareProfessional_IncidentReport");
+
+        modelBuilder.Entity<IncidentReportHealthcareProfessional>()
+            .HasOne<Profession>()
+            .WithMany()
+            .HasForeignKey(p => p.ProfessionId)
+            .HasConstraintName("FK_IRHealthcareProfessional_Profession")
+            .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<IncidentReportHealthcareProfessional>()
+            .HasOne<Position>()
+            .WithMany()
+            .HasForeignKey(p => p.PositionId)
+            .HasConstraintName("FK_IRHealthcareProfessional_Position")
             .OnDelete(DeleteBehavior.NoAction);
 
         modelBuilder.Entity<IncidentReportMedication>()
@@ -763,6 +904,8 @@ public class AppDbContext : DbContext
             new Permission { Id = 2, Name = "Submit Report", PermissionTag = "incident_reports.submit", ParentId = 1, SystemModuleId = 1 },
             new Permission { Id = 3, Name = "View All Reports", PermissionTag = "incident_reports.view_all", ParentId = 1, SystemModuleId = 1 },
             new Permission { Id = 4, Name = "Export Reports", PermissionTag = "incident_reports.export", ParentId = 1, SystemModuleId = 1 },
+            new Permission { Id = 24, Name = "Submit Medication Error Reports", PermissionTag = "incident_reports.submit_medication_error", ParentId = 1, SystemModuleId = 1 },
+            new Permission { Id = 25, Name = "Submit ADR Reports", PermissionTag = "incident_reports.submit_adr", ParentId = 1, SystemModuleId = 1 },
 
             new Permission { Id = 5, Name = "Clinical Review", PermissionTag = "clinical_review", ParentId = null, SystemModuleId = 2 },
             new Permission { Id = 6, Name = "Start Review", PermissionTag = "clinical_review.start", ParentId = 5, SystemModuleId = 2 },
@@ -771,6 +914,7 @@ public class AppDbContext : DbContext
             new Permission { Id = 8, Name = "Alert Rules", PermissionTag = "alert_rules", ParentId = null, SystemModuleId = 3 },
             new Permission { Id = 9, Name = "View Alert Rules", PermissionTag = "alert_rules.view", ParentId = 8, SystemModuleId = 3 },
             new Permission { Id = 10, Name = "Manage Alert Rules", PermissionTag = "alert_rules.manage", ParentId = 8, SystemModuleId = 3 },
+            new Permission { Id = 26, Name = "View Alert Triggers Dashboard", PermissionTag = "alert_rules.view_dashboard", ParentId = 8, SystemModuleId = 3 },
 
             new Permission { Id = 11, Name = "Configurations", PermissionTag = "configurations", ParentId = null, SystemModuleId = 4 },
             new Permission { Id = 12, Name = "Manage Configurations", PermissionTag = "configurations.manage", ParentId = 11, SystemModuleId = 4 },
@@ -797,10 +941,16 @@ public class AppDbContext : DbContext
         // Training & Support (22/23) defaults to every role — it's a help/reference
         // resource, not a restricted feature. Matches the current frontend
         // ROLE_PERMISSIONS map plus sensible baseline access.
-        var adminAll = Enumerable.Range(1, 23).Select(pid => new RolePermission { RoleId = 3, PermissionId = pid });
+        // Submit Medication Error/ADR (24/25) default to every role that already has
+        // the general Submit Report (2) grant, so nobody's ability to submit either
+        // report type changes until an Admin deliberately unchecks one — the split
+        // is opt-out, not opt-in, on top of the existing baseline. View Alert
+        // Triggers Dashboard (26) is a standalone permission alongside View/Manage
+        // Alert Rules — only Admin gets it by default, same as 8/9/10 were before.
+        var adminAll = Enumerable.Range(1, 26).Select(pid => new RolePermission { RoleId = 3, PermissionId = pid });
         var physician = new[] { 1, 3, 5, 6, 7, 20, 21, 22, 23 }.Select(pid => new RolePermission { RoleId = 2, PermissionId = pid });
-        var nurse = new[] { 1, 2, 15, 16, 20, 21, 22, 23 }.Select(pid => new RolePermission { RoleId = 1, PermissionId = pid });
-        var pharmacist = new[] { 1, 2, 20, 21, 22, 23 }.Select(pid => new RolePermission { RoleId = 4, PermissionId = pid });
+        var nurse = new[] { 1, 2, 15, 16, 20, 21, 22, 23, 24, 25 }.Select(pid => new RolePermission { RoleId = 1, PermissionId = pid });
+        var pharmacist = new[] { 1, 2, 20, 21, 22, 23, 24, 25 }.Select(pid => new RolePermission { RoleId = 4, PermissionId = pid });
 
         modelBuilder.Entity<RolePermission>().HasData(
             adminAll.Concat(physician).Concat(nurse).Concat(pharmacist).ToArray()

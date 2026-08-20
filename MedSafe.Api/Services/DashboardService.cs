@@ -103,7 +103,8 @@ public class DashboardService : IDashboardService
 
         var severityLookup = SeverityCodes.ToDictionary(c => c, _ => 0);
         foreach (var r in reports)
-            if (severityLookup.ContainsKey(r.HarmLevelCode))
+            // ADR reports have no NCC MERP harm level — HarmLevelCode is null for them.
+            if (r.HarmLevelCode != null && severityLookup.ContainsKey(r.HarmLevelCode))
                 severityLookup[r.HarmLevelCode]++;
 
         var topMedications = reports
