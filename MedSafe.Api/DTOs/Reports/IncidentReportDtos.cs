@@ -10,6 +10,7 @@ public sealed class SubmitIncidentReportRequest
     public string PatientName { get; set; } = string.Empty;
     public string PatientRef { get; set; } = string.Empty;
     public short PatientAge { get; set; }
+    public DateTime? PatientDateOfBirth { get; set; }
     public string PatientSex { get; set; } = string.Empty;
     public decimal? PatientWeightKg { get; set; }
     public string? RelevantMedicalHistory { get; set; }
@@ -54,15 +55,21 @@ public sealed class SubmitIncidentReportRequest
     public string IncidentNarrative { get; set; } = string.Empty;
     public int? ReportedIncidentSeverityId { get; set; }
     public bool? IsResearchStudyRelated { get; set; }
+    public List<int> OtherDepartmentIds { get; set; } = [];
+    public List<WitnessRequest> Witnesses { get; set; } = [];
 
     // =====================================================
     // STEP 4 - REPORTER / VISIT
     // =====================================================
     public int ProfessionId { get; set; }
     public int PositionId { get; set; }
+    public string? EnteredByTitle { get; set; }
+    public string? ReporterPhoneNumber { get; set; }
     public int VisitTypeId { get; set; }
     public int? ReportingSourceId { get; set; }
     public List<HealthcareProfessionalRequest> OtherHealthcareProfessionals { get; set; } = [];
+    public List<ReporterRequest> Reporters { get; set; } = [];
+    public List<ManualNotificationRequest> ManualNotifications { get; set; } = [];
 
     // =====================================================
     // STEP 5 - OUTCOME
@@ -111,6 +118,27 @@ public sealed class HealthcareProfessionalRequest
     public string? ContactNumber { get; set; }
 }
 
+public sealed class WitnessRequest
+{
+    public string Name { get; set; } = string.Empty;
+    public string? Address { get; set; }
+    public string? PhoneNumber { get; set; }
+}
+
+public sealed class ReporterRequest
+{
+    public string Name { get; set; } = string.Empty;
+    public DateTime ReportedDate { get; set; }
+    public int? ProfessionId { get; set; }
+}
+
+public sealed class ManualNotificationRequest
+{
+    public string TypeOfPersonNotified { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
+    public DateTime NotifiedAt { get; set; }
+}
+
 public sealed class SubmitIncidentReportResponse
 {
     public int Id { get; set; }
@@ -133,6 +161,7 @@ public sealed class IncidentReportDto
     public string? PatientReference { get; set; }
     public string? PatientName { get; set; }
     public short PatientAge { get; set; }
+    public DateTime? PatientDateOfBirth { get; set; }
     public string PatientSex { get; set; } = null!;
     public decimal? PatientWeightKg { get; set; }
     public string? RelevantMedicalHistory { get; set; }
@@ -171,6 +200,9 @@ public sealed class IncidentReportDto
     public string? VisitTypeName { get; set; }
     public string? ReportingSourceName { get; set; }
     public string? ReportedIncidentSeverityName { get; set; }
+    public List<int> OtherDepartmentIds { get; set; } = [];
+    public List<string> OtherDepartmentNames { get; set; } = [];
+    public List<WitnessDto> Witnesses { get; set; } = [];
 
     public int? ErrorCategoryId { get; set; }
     public int? StageOfProcessId { get; set; }
@@ -186,7 +218,11 @@ public sealed class IncidentReportDto
 
     public int? ProfessionId { get; set; }
     public int? PositionId { get; set; }
+    public string? EnteredByTitle { get; set; }
+    public string? ReporterPhoneNumber { get; set; }
     public List<HealthcareProfessionalDto> OtherHealthcareProfessionals { get; set; } = [];
+    public List<ReporterDto> Reporters { get; set; } = [];
+    public List<ManualNotificationDto> ManualNotifications { get; set; } = [];
 
     public string? ImmediateActionTaken { get; set; }
     public int PatientOutcomeId { get; set; }
@@ -238,6 +274,33 @@ public sealed class IncidentReportAttachmentDto
     public long FileSizeBytes { get; set; }
     public DateTime UploadedAt { get; set; }
     public int UploadedByUserId { get; set; }
+    public string? Category { get; set; }
+    public string? Description { get; set; }
+}
+
+public sealed class WitnessDto
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = null!;
+    public string? Address { get; set; }
+    public string? PhoneNumber { get; set; }
+}
+
+public sealed class ReporterDto
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = null!;
+    public DateTime ReportedDate { get; set; }
+    public int? ProfessionId { get; set; }
+    public string? ProfessionName { get; set; }
+}
+
+public sealed class ManualNotificationDto
+{
+    public int Id { get; set; }
+    public string TypeOfPersonNotified { get; set; } = null!;
+    public string Name { get; set; } = null!;
+    public DateTime NotifiedAt { get; set; }
 }
 
 public sealed class IncidentReportSummaryDto

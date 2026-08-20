@@ -45,6 +45,10 @@ public class IncidentReportService : IIncidentReportService
             AddCurrentMedications(incident.Id, request.CurrentMedicationIds);
             AddContributingFactors(incident.Id, request.ContributingFactorIds);
             AddHealthcareProfessionals(incident.Id, request.OtherHealthcareProfessionals);
+            AddOtherDepartments(incident.Id, request.OtherDepartmentIds);
+            AddWitnesses(incident.Id, request.Witnesses);
+            AddReporters(incident.Id, request.Reporters);
+            AddManualNotifications(incident.Id, request.ManualNotifications);
 
             if (reportType.Code == AdrCode)
             {
@@ -100,6 +104,10 @@ public class IncidentReportService : IIncidentReportService
             .Include(r => r.Attachments)
             .Include(r => r.ConcomitantMedications)
             .Include(r => r.HealthcareProfessionals)
+            .Include(r => r.Witnesses)
+            .Include(r => r.OtherDepartments)
+            .Include(r => r.Reporters)
+            .Include(r => r.ManualNotifications)
             .FirstOrDefaultAsync(r => r.Id == id, cancellationToken);
 
         return report == null ? null : await MapToDtoAsync(report, cancellationToken);
@@ -139,6 +147,10 @@ public class IncidentReportService : IIncidentReportService
             .Include(r => r.Attachments)
             .Include(r => r.ConcomitantMedications)
             .Include(r => r.HealthcareProfessionals)
+            .Include(r => r.Witnesses)
+            .Include(r => r.OtherDepartments)
+            .Include(r => r.Reporters)
+            .Include(r => r.ManualNotifications)
             .OrderByDescending(r => r.SubmittedAt)
             .ToListAsync(cancellationToken);
 
@@ -500,6 +512,7 @@ public class IncidentReportService : IIncidentReportService
             PatientName = request.PatientName.Trim(),
             PatientReference = request.PatientRef.Trim(),
             PatientAge = request.PatientAge,
+            PatientDateOfBirth = request.PatientDateOfBirth,
             PatientSex = request.PatientSex.Trim(),
             PatientWeightKg = request.PatientWeightKg,
             RelevantMedicalHistory = request.RelevantMedicalHistory?.Trim(),
@@ -538,6 +551,8 @@ public class IncidentReportService : IIncidentReportService
             // Step 4
             ProfessionId = request.ProfessionId,
             PositionId = request.PositionId,
+            EnteredByTitle = request.EnteredByTitle?.Trim(),
+            ReporterPhoneNumber = request.ReporterPhoneNumber?.Trim(),
 
             // Step 5
             ImmediateActionTaken = request.ImmediateActionTaken?.Trim(),
@@ -598,6 +613,66 @@ public class IncidentReportService : IIncidentReportService
                 ProfessionId = professional.ProfessionId,
                 PositionId = professional.PositionId,
                 ContactNumber = professional.ContactNumber?.Trim(),
+                CreatedBy = _currentUser.UserId,
+                CreatedDate = DateTime.UtcNow
+            });
+        }
+    }
+
+    private void AddOtherDepartments(int incidentReportId, List<int> unitDepartmentIds)
+    {
+        foreach (var unitDepartmentId in unitDepartmentIds.Distinct())
+        {
+            _db.IncidentReportOtherDepartments.Add(new IncidentReportOtherDepartment
+            {
+                IncidentReportId = incidentReportId,
+                UnitDepartmentId = unitDepartmentId
+            });
+        }
+    }
+
+    private void AddWitnesses(int incidentReportId, List<WitnessRequest> witnesses)
+    {
+        foreach (var witness in witnesses)
+        {
+            _db.IncidentReportWitnesses.Add(new IncidentReportWitness
+            {
+                IncidentReportId = incidentReportId,
+                Name = witness.Name.Trim(),
+                Address = witness.Address?.Trim(),
+                PhoneNumber = witness.PhoneNumber?.Trim(),
+                CreatedBy = _currentUser.UserId,
+                CreatedDate = DateTime.UtcNow
+            });
+        }
+    }
+
+    private void AddReporters(int incidentReportId, List<ReporterRequest> reporters)
+    {
+        foreach (var reporter in reporters)
+        {
+            _db.IncidentReportReporters.Add(new IncidentReportReporter
+            {
+                IncidentReportId = incidentReportId,
+                Name = reporter.Name.Trim(),
+                ReportedDate = reporter.ReportedDate,
+                ProfessionId = reporter.ProfessionId,
+                CreatedBy = _currentUser.UserId,
+                CreatedDate = DateTime.UtcNow
+            });
+        }
+    }
+
+    private void AddManualNotifications(int incidentReportId, List<ManualNotificationRequest> notifications)
+    {
+        foreach (var notification in notifications)
+        {
+            _db.IncidentReportManualNotifications.Add(new IncidentReportManualNotification
+            {
+                IncidentReportId = incidentReportId,
+                TypeOfPersonNotified = notification.TypeOfPersonNotified.Trim(),
+                Name = notification.Name.Trim(),
+                NotifiedAt = notification.NotifiedAt,
                 CreatedBy = _currentUser.UserId,
                 CreatedDate = DateTime.UtcNow
             });
@@ -725,6 +800,16 @@ public class IncidentReportService : IIncidentReportService
             ? await _db.ReportedIncidentSeverities.Where(x => x.Id == r.ReportedIncidentSeverityId).Select(x => x.Name).FirstOrDefaultAsync(cancellationToken)
             : null;
 
+        var otherDepartmentIds = r.OtherDepartments.Select(d => d.UnitDepartmentId).ToList();
+        var otherDepartmentNames = otherDepartmentIds.Count == 0
+            ? []
+            : await _db.UnitDepartments.Where(x => otherDepartmentIds.Contains(x.Id)).Select(x => x.Name).ToListAsync(cancellationToken);
+
+        var reporterProfessionIds = r.Reporters.Where(rep => rep.ProfessionId.HasValue).Select(rep => rep.ProfessionId!.Value).Distinct().ToList();
+        var reporterProfessionNames = reporterProfessionIds.Count == 0
+            ? new Dictionary<int, string>()
+            : await _db.Professions.Where(x => reporterProfessionIds.Contains(x.Id)).ToDictionaryAsync(x => x.Id, x => x.Name, cancellationToken);
+
         return new IncidentReportDto
         {
             Id = r.Id,
@@ -737,6 +822,7 @@ public class IncidentReportService : IIncidentReportService
             PatientReference = r.PatientReference,
             PatientName = r.PatientName,
             PatientAge = r.PatientAge,
+            PatientDateOfBirth = r.PatientDateOfBirth,
             PatientSex = r.PatientSex,
             PatientWeightKg = r.PatientWeightKg,
             RelevantMedicalHistory = r.RelevantMedicalHistory,
@@ -790,6 +876,15 @@ public class IncidentReportService : IIncidentReportService
             VisitTypeName = visitTypeName,
             ReportingSourceName = reportingSourceName,
             ReportedIncidentSeverityName = reportedIncidentSeverityName,
+            OtherDepartmentIds = otherDepartmentIds,
+            OtherDepartmentNames = otherDepartmentNames,
+            Witnesses = r.Witnesses.Select(w => new WitnessDto
+            {
+                Id = w.Id,
+                Name = w.Name,
+                Address = w.Address,
+                PhoneNumber = w.PhoneNumber
+            }).ToList(),
             ErrorCategoryId = r.ErrorCategoryId,
             StageOfProcessId = r.StageOfProcessId,
             AdrReactionDescription = r.AdrReactionDescription,
@@ -803,6 +898,8 @@ public class IncidentReportService : IIncidentReportService
             SeriousnessCriterionIds = r.SeriousnessCriteria.Select(c => c.SeriousnessCriterionId).ToList(),
             ProfessionId = r.ProfessionId,
             PositionId = r.PositionId,
+            EnteredByTitle = r.EnteredByTitle,
+            ReporterPhoneNumber = r.ReporterPhoneNumber,
             OtherHealthcareProfessionals = r.HealthcareProfessionals.Select(p => new HealthcareProfessionalDto
             {
                 Id = p.Id,
@@ -810,6 +907,21 @@ public class IncidentReportService : IIncidentReportService
                 ProfessionId = p.ProfessionId,
                 PositionId = p.PositionId,
                 ContactNumber = p.ContactNumber
+            }).ToList(),
+            Reporters = r.Reporters.Select(rep => new ReporterDto
+            {
+                Id = rep.Id,
+                Name = rep.Name,
+                ReportedDate = rep.ReportedDate,
+                ProfessionId = rep.ProfessionId,
+                ProfessionName = rep.ProfessionId.HasValue && reporterProfessionNames.TryGetValue(rep.ProfessionId.Value, out var pn) ? pn : null
+            }).ToList(),
+            ManualNotifications = r.ManualNotifications.Select(n => new ManualNotificationDto
+            {
+                Id = n.Id,
+                TypeOfPersonNotified = n.TypeOfPersonNotified,
+                Name = n.Name,
+                NotifiedAt = n.NotifiedAt
             }).ToList(),
             ImmediateActionTaken = r.ImmediateActionTaken,
             PatientOutcomeId = r.PatientOutcomeId,
@@ -821,7 +933,9 @@ public class IncidentReportService : IIncidentReportService
                 ContentType = a.ContentType,
                 FileSizeBytes = a.FileSizeBytes,
                 UploadedAt = a.UploadedAt,
-                UploadedByUserId = a.UploadedByUserId
+                UploadedByUserId = a.UploadedByUserId,
+                Category = a.Category,
+                Description = a.Description
             }).ToList()
         };
     }

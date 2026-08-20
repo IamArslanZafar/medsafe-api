@@ -16,6 +16,8 @@ public class GlobalExceptionFilter : IExceptionFilter
         var (statusCode, message) = context.Exception switch
         {
             ValidationException ex => (400, ex.Message),
+            System.Text.Json.JsonException ex => (400, ex.Message),
+            BadHttpRequestException ex => (400, ex.Message),
             KeyNotFoundException ex => (404, ex.Message),
             UnauthorizedAccessException ex => (403, ex.Message),
             ConflictException ex => (409, ex.Message),

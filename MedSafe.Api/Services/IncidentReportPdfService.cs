@@ -43,6 +43,11 @@ public class IncidentReportPdfService : IIncidentReportPdfService
             .Include(r => r.CurrentMedicationLinks)
             .Include(r => r.ConcomitantMedications)
             .Include(r => r.HealthcareProfessionals)
+            .Include(r => r.Witnesses)
+            .Include(r => r.OtherDepartments)
+            .Include(r => r.Reporters)
+            .Include(r => r.ManualNotifications)
+            .Include(r => r.Attachments)
             .Include(r => r.Review)
             .FirstOrDefaultAsync(r => r.Id == incidentReportId, cancellationToken);
 
@@ -168,6 +173,12 @@ public class IncidentReportPdfService : IIncidentReportPdfService
                     ("Report Type", type.label, type),
                     ("Stage", r.StageOfProcessId.HasValue ? lookups.StageOfProcesses.GetValueOrDefault(r.StageOfProcessId.Value, "—") : "—", null),
                     ("Reported Incident Severity", r.ReportedIncidentSeverityId.HasValue ? lookups.ReportedIncidentSeverities.GetValueOrDefault(r.ReportedIncidentSeverityId.Value, "—") : "—", null));
+
+                if (r.OtherDepartments.Count > 0)
+                {
+                    var names = r.OtherDepartments.Select(d => lookups.UnitDepartments.GetValueOrDefault(d.UnitDepartmentId, "—"));
+                    FullTextRow(inner, next, "Other Service(s)/Dept(s) Involved", string.Join(", ", names));
+                }
             }));
 
             col.Item().Element(c => Section(c, "1. Patient Demographics", (inner, next) =>
@@ -177,6 +188,7 @@ public class IncidentReportPdfService : IIncidentReportPdfService
                     ("Patient Ref", r.PatientReference ?? "—", null),
                     ("Sex", r.PatientSex, null),
                     ("Age", r.PatientAge.ToString(), null),
+                    ("Date of Birth", r.PatientDateOfBirth.HasValue ? r.PatientDateOfBirth.Value.ToString("dd MMM yyyy") : "—", null),
                     ("Weight", r.PatientWeightKg.HasValue ? $"{r.PatientWeightKg:0.##} kg" : "—", null),
                     ("Admission Date", r.AdmissionDate.HasValue ? r.AdmissionDate.Value.ToString("dd MMM yyyy") : "—", null),
                     ("Current Diagnosis", string.IsNullOrWhiteSpace(r.CurrentDiagnosis) ? "—" : r.CurrentDiagnosis, null),
@@ -195,6 +207,8 @@ public class IncidentReportPdfService : IIncidentReportPdfService
                 StatGrid(inner, next, 2,
                     ("Profession", r.ProfessionId.HasValue ? lookups.Professions.GetValueOrDefault(r.ProfessionId.Value, "—") : "—", null),
                     ("Position", r.PositionId.HasValue ? lookups.Positions.GetValueOrDefault(r.PositionId.Value, "—") : "—", null),
+                    ("Entered By Title", string.IsNullOrWhiteSpace(r.EnteredByTitle) ? "—" : r.EnteredByTitle, null),
+                    ("Reporter Phone", string.IsNullOrWhiteSpace(r.ReporterPhoneNumber) ? "—" : r.ReporterPhoneNumber, null),
                     ("Visit Type", r.VisitTypeId.HasValue ? lookups.VisitTypes.GetValueOrDefault(r.VisitTypeId.Value, "—") : "—", null),
                     ("Reporting Source", r.ReportingSourceId.HasValue ? lookups.ReportingSources.GetValueOrDefault(r.ReportingSourceId.Value, "—") : "—", null));
 
@@ -208,6 +222,42 @@ public class IncidentReportPdfService : IIncidentReportPdfService
                             lookups.Professions.GetValueOrDefault(hp.ProfessionId, "—"),
                             lookups.Positions.GetValueOrDefault(hp.PositionId, "—"),
                             hp.ContactNumber ?? "—",
+                        }));
+                }
+
+                if (r.Reporters.Count > 0)
+                {
+                    SimpleTable(inner,
+                        ["Reported By", "Profession", "Date"],
+                        r.Reporters.Select(rep => new[]
+                        {
+                            rep.Name,
+                            rep.ProfessionId.HasValue ? lookups.Professions.GetValueOrDefault(rep.ProfessionId.Value, "—") : "—",
+                            rep.ReportedDate.ToString("dd MMM yyyy"),
+                        }));
+                }
+
+                if (r.Witnesses.Count > 0)
+                {
+                    SimpleTable(inner,
+                        ["Witness", "Address", "Phone"],
+                        r.Witnesses.Select(w => new[]
+                        {
+                            w.Name,
+                            w.Address ?? "—",
+                            w.PhoneNumber ?? "—",
+                        }));
+                }
+
+                if (r.ManualNotifications.Count > 0)
+                {
+                    SimpleTable(inner,
+                        ["Notifications — Type of Person", "Name", "Date"],
+                        r.ManualNotifications.Select(n => new[]
+                        {
+                            n.TypeOfPersonNotified,
+                            n.Name,
+                            n.NotifiedAt.ToString("dd MMM yyyy HH:mm"),
                         }));
                 }
             }));
@@ -255,6 +305,21 @@ public class IncidentReportPdfService : IIncidentReportPdfService
                         ("Related to research study (MRC-approved, unanticipated problem)", r.IsResearchStudyRelated.Value ? "Yes" : "No", null));
                 }
 
+                StatGrid(inner, next, 1,
+                    ("Patient Outcome", lookups.PatientOutcomes.GetValueOrDefault(r.PatientOutcomeId, "—"), null));
+
+                if (r.ReportType == "ADR" && r.SeriousnessCriteria.Count > 0)
+                {
+                    FullTextRow(inner, next, "Seriousness Criteria",
+                        string.Join(", ", r.SeriousnessCriteria.Select(sc => lookups.SeriousnessCriteria.GetValueOrDefault(sc.SeriousnessCriterionId, "—"))));
+                }
+
+                if (r.ContributingFactors.Count > 0)
+                {
+                    FullTextRow(inner, next, "Contributing Factors",
+                        string.Join(", ", r.ContributingFactors.Select(cf => lookups.ContributingFactors.GetValueOrDefault(cf.ContributingFactorId, "—"))));
+                }
+
                 FullTextRow(inner, next, "Narrative", r.IncidentNarrative);
                 if (!string.IsNullOrWhiteSpace(r.ImmediateActionTaken))
                     FullTextRow(inner, next, "Immediate Actions Taken", r.ImmediateActionTaken);
@@ -271,6 +336,21 @@ public class IncidentReportPdfService : IIncidentReportPdfService
                         {
                             m.CareSettingCode == "INPATIENT" ? "Inpatient" : "Outpatient",
                             m.MedicationText,
+                        }));
+                }));
+            }
+
+            var activeAttachments = r.Attachments.Where(a => !a.IsDeleted).ToList();
+            if (activeAttachments.Count > 0)
+            {
+                col.Item().Element(c => Section(c, "Attachments", inner =>
+                {
+                    SimpleTable(inner, ["File Name", "Category", "Description"],
+                        activeAttachments.Select(a => new[]
+                        {
+                            a.OriginalFileName,
+                            a.Category ?? "—",
+                            a.Description ?? "—",
                         }));
                 }));
             }
@@ -398,10 +478,10 @@ public class IncidentReportPdfService : IIncidentReportPdfService
     }
 
     private static IContainer HeaderCell(IContainer container) =>
-        container.Background(RowTint).Padding(6).Border(0.6f).BorderColor(Border);
+        container.Background(RowTint).Border(0.6f).BorderColor(Border).Padding(6);
 
     private static IContainer BodyCell(IContainer container) =>
-        container.Padding(6).Border(0.6f).BorderColor(Border);
+        container.Border(0.6f).BorderColor(Border).Padding(6);
 
     // Generic bordered/header table for the smaller child-record lists (Concomitant
     // Medications, Other Healthcare Professionals) — same visual style as
@@ -446,6 +526,10 @@ public class IncidentReportPdfService : IIncidentReportPdfService
         public Dictionary<int, string> ReportingSources { get; init; } = [];
         public Dictionary<int, string> Sections { get; init; } = [];
         public Dictionary<int, string> ReportedIncidentSeverities { get; init; } = [];
+        public Dictionary<int, string> UnitDepartments { get; init; } = [];
+        public Dictionary<int, string> PatientOutcomes { get; init; } = [];
+        public Dictionary<int, string> ContributingFactors { get; init; } = [];
+        public Dictionary<int, string> SeriousnessCriteria { get; init; } = [];
     }
 
     private async Task<LookupNames> LoadLookupNamesAsync(CancellationToken cancellationToken) => new()
@@ -464,6 +548,10 @@ public class IncidentReportPdfService : IIncidentReportPdfService
         VisitTypes = await _db.VisitTypes.AsNoTracking().ToDictionaryAsync(x => x.Id, x => x.Name, cancellationToken),
         ReportingSources = await _db.ReportingSources.AsNoTracking().ToDictionaryAsync(x => x.Id, x => x.Name, cancellationToken),
         Sections = await _db.Sections.AsNoTracking().ToDictionaryAsync(x => x.Id, x => x.Name, cancellationToken),
-        ReportedIncidentSeverities = await _db.ReportedIncidentSeverities.AsNoTracking().ToDictionaryAsync(x => x.Id, x => x.Name, cancellationToken)
+        ReportedIncidentSeverities = await _db.ReportedIncidentSeverities.AsNoTracking().ToDictionaryAsync(x => x.Id, x => x.Name, cancellationToken),
+        UnitDepartments = await _db.UnitDepartments.AsNoTracking().ToDictionaryAsync(x => x.Id, x => x.Name, cancellationToken),
+        PatientOutcomes = await _db.PatientOutcomes.AsNoTracking().ToDictionaryAsync(x => x.Id, x => x.Name, cancellationToken),
+        ContributingFactors = await _db.ContributingFactors.AsNoTracking().ToDictionaryAsync(x => x.Id, x => x.Name, cancellationToken),
+        SeriousnessCriteria = await _db.SeriousnessCriteria.AsNoTracking().ToDictionaryAsync(x => x.Id, x => x.Name, cancellationToken)
     };
 }

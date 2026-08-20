@@ -67,6 +67,10 @@ public class AppDbContext : DbContext
     public DbSet<IncidentReportHealthcareProfessional> IncidentReportHealthcareProfessionals => Set<IncidentReportHealthcareProfessional>();
     public DbSet<ReportedIncidentSeverity> ReportedIncidentSeverities => Set<ReportedIncidentSeverity>();
     public DbSet<Section> Sections => Set<Section>();
+    public DbSet<IncidentReportWitness> IncidentReportWitnesses => Set<IncidentReportWitness>();
+    public DbSet<IncidentReportOtherDepartment> IncidentReportOtherDepartments => Set<IncidentReportOtherDepartment>();
+    public DbSet<IncidentReportReporter> IncidentReportReporters => Set<IncidentReportReporter>();
+    public DbSet<IncidentReportManualNotification> IncidentReportManualNotifications => Set<IncidentReportManualNotification>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -188,6 +192,14 @@ public class AppDbContext : DbContext
             .ToTable("ReportedIncidentSeverity", tb => tb.ExcludeFromMigrations());
         modelBuilder.Entity<Section>()
             .ToTable("Section", tb => tb.ExcludeFromMigrations());
+        modelBuilder.Entity<IncidentReportWitness>()
+            .ToTable("IncidentReportWitness", tb => tb.ExcludeFromMigrations());
+        modelBuilder.Entity<IncidentReportOtherDepartment>()
+            .ToTable("IncidentReportOtherDepartment", tb => tb.ExcludeFromMigrations());
+        modelBuilder.Entity<IncidentReportReporter>()
+            .ToTable("IncidentReportReporter", tb => tb.ExcludeFromMigrations());
+        modelBuilder.Entity<IncidentReportManualNotification>()
+            .ToTable("IncidentReportManualNotification", tb => tb.ExcludeFromMigrations());
 
         // Alert rule builder tables (and AlertRule's new columns) were added directly
         // on the live DB via SQL script, same as the IncidentReports rebuild above —
@@ -408,6 +420,44 @@ public class AppDbContext : DbContext
             .WithMany(r => r.Medications)
             .HasForeignKey(m => m.IncidentReportId)
             .HasConstraintName("FK_IncidentReportMedication_IncidentReport");
+
+        modelBuilder.Entity<IncidentReportWitness>()
+            .HasOne(w => w.IncidentReport)
+            .WithMany(r => r.Witnesses)
+            .HasForeignKey(w => w.IncidentReportId)
+            .HasConstraintName("FK_IRWitness_IncidentReport");
+
+        modelBuilder.Entity<IncidentReportOtherDepartment>()
+            .HasOne(d => d.IncidentReport)
+            .WithMany(r => r.OtherDepartments)
+            .HasForeignKey(d => d.IncidentReportId)
+            .HasConstraintName("FK_IROtherDepartment_IncidentReport");
+
+        modelBuilder.Entity<IncidentReportOtherDepartment>()
+            .HasOne(d => d.UnitDepartment)
+            .WithMany()
+            .HasForeignKey(d => d.UnitDepartmentId)
+            .HasConstraintName("FK_IROtherDepartment_UnitDepartment")
+            .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<IncidentReportReporter>()
+            .HasOne(p => p.IncidentReport)
+            .WithMany(r => r.Reporters)
+            .HasForeignKey(p => p.IncidentReportId)
+            .HasConstraintName("FK_IRReporter_IncidentReport");
+
+        modelBuilder.Entity<IncidentReportReporter>()
+            .HasOne<Profession>()
+            .WithMany()
+            .HasForeignKey(p => p.ProfessionId)
+            .HasConstraintName("FK_IRReporter_Profession")
+            .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<IncidentReportManualNotification>()
+            .HasOne(n => n.IncidentReport)
+            .WithMany(r => r.ManualNotifications)
+            .HasForeignKey(n => n.IncidentReportId)
+            .HasConstraintName("FK_IRManualNotification_IncidentReport");
 
         modelBuilder.Entity<IncidentReportMedication>()
             .HasOne<DoseUnit>()

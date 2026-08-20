@@ -28,7 +28,7 @@ public class IncidentAttachmentService : IIncidentAttachmentService
         _storageRoot = Path.IsPathRooted(configuredRoot) ? configuredRoot : Path.Combine(env.ContentRootPath, configuredRoot);
     }
 
-    public async Task<IncidentReportAttachmentDto> UploadAsync(int incidentReportId, IFormFile file, CancellationToken cancellationToken)
+    public async Task<IncidentReportAttachmentDto> UploadAsync(int incidentReportId, IFormFile file, string? category, string? description, CancellationToken cancellationToken)
     {
         var incidentExists = await _db.IncidentReports.AnyAsync(x => x.Id == incidentReportId, cancellationToken);
         if (!incidentExists)
@@ -70,7 +70,9 @@ public class IncidentAttachmentService : IIncidentAttachmentService
             Sha256Hash = sha256Hash,
             UploadedByUserId = _currentUser.UserId,
             UploadedAt = DateTime.UtcNow,
-            IsDeleted = false
+            IsDeleted = false,
+            Category = category?.Trim(),
+            Description = description?.Trim()
         };
 
         _db.IncidentReportAttachments.Add(attachment);
@@ -83,7 +85,9 @@ public class IncidentAttachmentService : IIncidentAttachmentService
             ContentType = attachment.ContentType,
             FileSizeBytes = attachment.FileSizeBytes,
             UploadedAt = attachment.UploadedAt,
-            UploadedByUserId = attachment.UploadedByUserId
+            UploadedByUserId = attachment.UploadedByUserId,
+            Category = attachment.Category,
+            Description = attachment.Description
         };
     }
 

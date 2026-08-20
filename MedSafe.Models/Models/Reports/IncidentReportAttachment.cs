@@ -9,6 +9,8 @@ public class IncidentReportAttachment
     public string ContentType { get; set; } = null!;
     public long FileSizeBytes { get; set; }
     public string? Sha256Hash { get; set; }
+    public string? Category { get; set; }
+    public string? Description { get; set; }
     public int UploadedByUserId { get; set; }
     public DateTime UploadedAt { get; set; } = DateTime.UtcNow;
     public bool IsDeleted { get; set; }

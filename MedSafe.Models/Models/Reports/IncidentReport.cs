@@ -18,6 +18,7 @@ public class IncidentReport
     public short PatientAge { get; set; }
     public string PatientSex { get; set; } = null!;
     public decimal? PatientWeightKg { get; set; }
+    public DateTime? PatientDateOfBirth { get; set; }
     public string? RelevantMedicalHistory { get; set; }
     public DateTime? AdmissionDate { get; set; }
     public string? CurrentDiagnosis { get; set; }
@@ -59,6 +60,8 @@ public class IncidentReport
     // Step 4
     public int? ProfessionId { get; set; }
     public int? PositionId { get; set; }
+    public string? EnteredByTitle { get; set; }
+    public string? ReporterPhoneNumber { get; set; }
 
     // Step 5
     public string? ImmediateActionTaken { get; set; }
@@ -74,6 +77,10 @@ public class IncidentReport
     public ICollection<IncidentNotification> Notifications { get; set; } = new List<IncidentNotification>();
     public ICollection<IncidentReportConcomitantMedication> ConcomitantMedications { get; set; } = new List<IncidentReportConcomitantMedication>();
     public ICollection<IncidentReportHealthcareProfessional> HealthcareProfessionals { get; set; } = new List<IncidentReportHealthcareProfessional>();
+    public ICollection<IncidentReportWitness> Witnesses { get; set; } = new List<IncidentReportWitness>();
+    public ICollection<IncidentReportOtherDepartment> OtherDepartments { get; set; } = new List<IncidentReportOtherDepartment>();
+    public ICollection<IncidentReportReporter> Reporters { get; set; } = new List<IncidentReportReporter>();
+    public ICollection<IncidentReportManualNotification> ManualNotifications { get; set; } = new List<IncidentReportManualNotification>();
 
     // Review workflow
     public IncidentReportReview? Review { get; set; }

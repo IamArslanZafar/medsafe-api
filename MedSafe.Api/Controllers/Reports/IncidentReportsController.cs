@@ -64,12 +64,12 @@ public class IncidentReportsController : ControllerBase
 
     [HttpPost("{incidentReportId:int}/attachments")]
     [RequestSizeLimit(10 * 1024 * 1024)]
-    public async Task<IActionResult> UploadAttachment(int incidentReportId, IFormFile file, CancellationToken cancellationToken)
+    public async Task<IActionResult> UploadAttachment(int incidentReportId, IFormFile file, [FromForm] string? category, [FromForm] string? description, CancellationToken cancellationToken)
     {
         if (!await _incidentReportService.CanCurrentUserAccessAsync(incidentReportId, cancellationToken))
             return Forbid();
 
-        var result = await _attachmentService.UploadAsync(incidentReportId, file, cancellationToken);
+        var result = await _attachmentService.UploadAsync(incidentReportId, file, category, description, cancellationToken);
         return Ok(result);
     }
 

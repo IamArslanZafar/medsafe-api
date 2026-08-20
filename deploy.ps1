@@ -47,13 +47,43 @@ try {
     Write-Log "Publish dir: $PublishDir"
     Write-Log "Site: $SiteName"
 
-    Write-Log "Publishing application..."
+    Write-Log "Publishing application (ASPNETCORE_ENVIRONMENT=Production)..."
+    $env:ASPNETCORE_ENVIRONMENT = "Production"
     & dotnet publish $ProjectPath -c $Configuration -o $PublishDir --nologo
     if ($LASTEXITCODE -ne 0) {
         throw "dotnet publish failed with exit code $LASTEXITCODE"
     }
 
     Write-Log "Publishing completed successfully"
+
+    # Inject the ASPNETCORE_ENVIRONMENT into the IIS web.config so the live
+    # server always loads appsettings.Production.json on start-up.
+    $webConfigPath = Join-Path $PublishDir "web.config"
+    if (Test-Path $webConfigPath) {
+        $xml = [xml](Get-Content $webConfigPath)
+        $aspNetCore = $xml.SelectSingleNode("//aspNetCore")
+        if ($aspNetCore -ne $null) {
+            $envVars = $aspNetCore.SelectSingleNode("environmentVariables")
+            if ($envVars -eq $null) {
+                $envVars = $xml.CreateElement("environmentVariables")
+                $aspNetCore.AppendChild($envVars) | Out-Null
+            }
+            # Remove any existing ASPNETCORE_ENVIRONMENT entry to avoid duplicates
+            $existing = $envVars.SelectSingleNode("environmentVariable[@name='ASPNETCORE_ENVIRONMENT']")
+            if ($existing -ne $null) { $envVars.RemoveChild($existing) | Out-Null }
+
+            $envVar = $xml.CreateElement("environmentVariable")
+            $envVar.SetAttribute("name", "ASPNETCORE_ENVIRONMENT")
+            $envVar.SetAttribute("value", "Production")
+            $envVars.AppendChild($envVar) | Out-Null
+            $xml.Save($webConfigPath)
+            Write-Log "Injected ASPNETCORE_ENVIRONMENT=Production into web.config"
+        } else {
+            Write-Log "WARNING: aspNetCore element not found in web.config — skipping env injection"
+        }
+    } else {
+        Write-Log "WARNING: web.config not found in publish dir — skipping env injection"
+    }
 
     $msdeploy = "C:/Program Files/IIS/Microsoft Web Deploy V3/msdeploy.exe"
     if (-not (Test-Path $msdeploy)) {
