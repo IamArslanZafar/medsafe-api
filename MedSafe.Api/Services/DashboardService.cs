@@ -56,6 +56,9 @@ public class DashboardService : IDashboardService
         if (!string.IsNullOrWhiteSpace(request.FacilityUnit) && request.FacilityUnit != "All Units")
             query = query.Where(r => r.IncidentLocation == request.FacilityUnit);
 
+        if (!string.IsNullOrWhiteSpace(request.ReportType))
+            query = query.Where(r => r.ReportType == request.ReportType);
+
         if (!string.IsNullOrWhiteSpace(request.MedicationName))
             query = query.Where(r => r.Medications.Any(m => m.MedicationName == request.MedicationName));
 

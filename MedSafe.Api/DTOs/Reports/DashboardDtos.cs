@@ -12,6 +12,8 @@ public sealed class DashboardSummaryRequest
 
     // All optional — same classification fields used on the Submit form. Each
     // narrows the same report set the KPIs/breakdown/trend/etc. are computed from.
+    // Raw value — "Medication Error" | "Near Miss" | "ADR" (matches IncidentReport.ReportType).
+    public string? ReportType { get; set; }
     public string? MedicationName { get; set; }
     public int? ErrorCategoryId { get; set; }
     public int? StageOfProcessId { get; set; }

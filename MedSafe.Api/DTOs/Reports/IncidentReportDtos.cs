@@ -309,6 +309,8 @@ public sealed class IncidentReportSummaryDto
     public int AwaitingReview { get; set; }
     public int HarmEvents { get; set; }
     public int ClosedCases { get; set; }
+    public int MedicationErrors { get; set; }
+    public int AdrReactions { get; set; }
 }
 
 // Same optional filter set as DashboardSummaryRequest, reused here so the Reports
@@ -325,6 +327,13 @@ public sealed class IncidentReportListRequest
     public string? FacilityUnit { get; set; }
     public DateTime? StartDate { get; set; }
     public DateTime? EndDate { get; set; }
+    // Raw values, matching what's actually stored: ReportType is "Medication Error" |
+    // "Near Miss" | "ADR"; Status is "Pending" | "UnderReview" | "Closed";
+    // Severity is "Harm" (NCC MERP E-I) | "NoHarm" (A-D) — the frontend's Reports Hub
+    // quick-filter dropdowns convert their local values to these before sending.
+    public string? ReportType { get; set; }
+    public string? Status { get; set; }
+    public string? Severity { get; set; }
     public string? MedicationName { get; set; }
     public int? ErrorCategoryId { get; set; }
     public int? StageOfProcessId { get; set; }

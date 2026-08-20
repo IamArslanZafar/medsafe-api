@@ -173,7 +173,9 @@ public class IncidentReportService : IIncidentReportService
                 HarmEvents = g.Count(x =>
                     x.HarmLevelCode == "E" || x.HarmLevelCode == "F" || x.HarmLevelCode == "G" ||
                     x.HarmLevelCode == "H" || x.HarmLevelCode == "I"),
-                ClosedCases = g.Count(x => x.ReportStatus == "Closed")
+                ClosedCases = g.Count(x => x.ReportStatus == "Closed"),
+                MedicationErrors = g.Count(x => x.ReportType == "Medication Error"),
+                AdrReactions = g.Count(x => x.ReportType == "ADR")
             })
             .FirstOrDefaultAsync(cancellationToken);
 
@@ -227,6 +229,17 @@ public class IncidentReportService : IIncidentReportService
 
         if (!string.IsNullOrWhiteSpace(request.FacilityUnit) && request.FacilityUnit != "All Units")
             query = query.Where(r => r.IncidentLocation == request.FacilityUnit);
+
+        if (!string.IsNullOrWhiteSpace(request.ReportType))
+            query = query.Where(r => r.ReportType == request.ReportType);
+
+        if (!string.IsNullOrWhiteSpace(request.Status))
+            query = query.Where(r => r.ReportStatus == request.Status);
+
+        if (request.Severity == "Harm")
+            query = query.Where(r => r.HarmLevelCode == "E" || r.HarmLevelCode == "F" || r.HarmLevelCode == "G" || r.HarmLevelCode == "H" || r.HarmLevelCode == "I");
+        else if (request.Severity == "NoHarm")
+            query = query.Where(r => r.HarmLevelCode == "A" || r.HarmLevelCode == "B" || r.HarmLevelCode == "C" || r.HarmLevelCode == "D");
 
         if (!string.IsNullOrWhiteSpace(request.MedicationName))
             query = query.Where(r => r.Medications.Any(m => m.MedicationName == request.MedicationName));
