@@ -56,17 +56,33 @@ public sealed class AlertDashboardOverviewDto
 {
     public int TotalRules { get; set; }
     public int ActiveRules { get; set; }
+    public int InactiveRules { get; set; }
+    // Rules whose own notification urgency is Immediate/Escalated — a rule
+    // configuration property, unrelated to any individual trigger's urgency.
+    public int ImmediateEscalatedRules { get; set; }
+    // Inferred from each rule's own REPORT_TYPE condition value(s), not from
+    // trigger history — a rule with no REPORT_TYPE condition counts in neither.
+    public int MedicationErrorRules { get; set; }
+    public int AdrRules { get; set; }
     public int CriticalAlerts { get; set; }
     public int AlertsTriggered { get; set; }
     public int NotificationsSent { get; set; }
     public int UniqueRecipients { get; set; }
     public List<AlertTrendPointDto> AlertsOverTime { get; set; } = [];
+    // Same day/hour bucketing as AlertsOverTime, for the KPI card sparklines.
+    public List<int> CriticalAlertsTrend { get; set; } = [];
+    public List<int> NotificationsSentTrend { get; set; } = [];
+    public List<int> UniqueRecipientsTrend { get; set; } = [];
     public List<AlertStatusCountDto> AlertsByStatus { get; set; } = [];
     public List<AlertReportTypeCountDto> AlertsByReportType { get; set; } = [];
     public List<AlertRuleCountDto> AlertsByRule { get; set; } = [];
     public List<NotificationChannelCountDto> NotificationsByChannel { get; set; } = [];
     public List<AlertUrgencyCountDto> AlertsByUrgency { get; set; } = [];
     public List<AlertTopRecipientDto> TopRecipients { get; set; } = [];
+    // Rule-configuration data (which fields rules are built on) — not scoped to
+    // the date/report-type filters above, same convention as DashboardService's
+    // Overall Dashboard FieldUsage.
+    public List<AlertRuleFieldUsageDto> FieldUsage { get; set; } = [];
 }
 
 // ── Trigger table ──

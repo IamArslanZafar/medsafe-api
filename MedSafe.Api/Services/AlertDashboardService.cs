@@ -13,11 +13,31 @@ public class AlertDashboardService : IAlertDashboardService
 
     private readonly AppDbContext _db;
     private readonly ICurrentUserService _currentUser;
+    private readonly IAlertRuleService _alertRuleService;
 
-    public AlertDashboardService(AppDbContext db, ICurrentUserService currentUser)
+    public AlertDashboardService(AppDbContext db, ICurrentUserService currentUser, IAlertRuleService alertRuleService)
     {
         _db = db;
         _currentUser = currentUser;
+        _alertRuleService = alertRuleService;
+    }
+
+    // Same day/hour bucketing as the AlertsOverTime trend, applied to any raw
+    // timestamp list — powers the KPI card sparklines.
+    private static List<int> BucketCounts(List<DateTime> timestamps, DateTime fromDate, DateTime toDate)
+    {
+        var counts = new List<int>();
+        if (fromDate == toDate)
+        {
+            var byHour = timestamps.GroupBy(t => t.Hour).ToDictionary(g => g.Key, g => g.Count());
+            for (var h = 0; h < 24; h++) counts.Add(byHour.TryGetValue(h, out var c) ? c : 0);
+        }
+        else
+        {
+            var byDay = timestamps.GroupBy(t => t.Date).ToDictionary(g => g.Key, g => g.Count());
+            for (var d = fromDate; d <= toDate; d = d.AddDays(1)) counts.Add(byDay.TryGetValue(d, out var c) ? c : 0);
+        }
+        return counts;
     }
 
     // Admin sees every alert system-wide. Everyone else gets exactly the same
@@ -53,6 +73,17 @@ public class AlertDashboardService : IAlertDashboardService
 
         var totalRules = await _db.AlertRules.CountAsync(x => !x.IsDeleted, cancellationToken);
         var activeRules = await _db.AlertRules.CountAsync(x => !x.IsDeleted && x.Enabled, cancellationToken);
+        var immediateEscalatedRules = await _db.AlertRules
+            .Include(r => r.NotificationUrgency)
+            .CountAsync(r => !r.IsDeleted && r.NotificationUrgency != null && CriticalUrgencyCodes.Contains(r.NotificationUrgency.Code), cancellationToken);
+        // Which report type a rule is "for" is read off its own REPORT_TYPE
+        // condition value(s) — not from trigger history — so a rule with no
+        // REPORT_TYPE condition configured counts toward neither.
+        var medicationErrorRules = await _db.AlertRules
+            .CountAsync(r => !r.IsDeleted && r.Conditions.Any(c => c.ConditionField.Code == "REPORT_TYPE" && c.Values.Any(v => v.TextValue == "Medication Error")), cancellationToken);
+        var adrRules = await _db.AlertRules
+            .CountAsync(r => !r.IsDeleted && r.Conditions.Any(c => c.ConditionField.Code == "REPORT_TYPE" && c.Values.Any(v => v.TextValue == "ADR")), cancellationToken);
+        var fieldUsage = await _alertRuleService.GetFieldUsageAsync(cancellationToken);
 
         var triggersInRange = ApplyUserScope(_db.AlertTriggerHistories)
             .Where(x => x.TriggeredAt >= fromDate && x.TriggeredAt < rangeEndExclusive
@@ -103,6 +134,32 @@ public class AlertDashboardService : IAlertDashboardService
                 alertsOverTime.Add(new AlertTrendPointDto { Date = d, Count = trendMap.TryGetValue(d, out var c) ? c : 0 });
         }
 
+        // KPI card sparklines — critical-alert and notification timestamps bucketed
+        // the same way as AlertsOverTime; "unique recipients" buckets distinct
+        // (bucket, recipient) pairs so a person notified twice in one bucket counts once.
+        var criticalTimestamps = await triggersInRange
+            .Where(x => x.Urgency != null && CriticalUrgencyCodes.Contains(x.Urgency.Code))
+            .Select(x => x.TriggeredAt)
+            .ToListAsync(cancellationToken);
+        var criticalAlertsTrend = BucketCounts(criticalTimestamps, fromDate, toDate);
+
+        var sentNotificationTimestamps = await ApplyNotificationUserScope(_db.IncidentNotifications)
+            .Where(x => x.AlertTriggerId != null && x.Status == "SENT"
+                && x.AlertTrigger!.TriggeredAt >= fromDate && x.AlertTrigger.TriggeredAt < rangeEndExclusive
+                && (!hasReportType || x.IncidentReport.ReportType == reportType))
+            .Select(x => x.SentAt ?? x.AlertTrigger!.TriggeredAt)
+            .ToListAsync(cancellationToken);
+        var notificationsSentTrend = BucketCounts(sentNotificationTimestamps, fromDate, toDate);
+
+        var recipientBucketPairs = await ApplyNotificationUserScope(_db.IncidentNotifications)
+            .Where(x => x.AlertTriggerId != null && x.RecipientUserId != null
+                && x.AlertTrigger!.TriggeredAt >= fromDate && x.AlertTrigger.TriggeredAt < rangeEndExclusive
+                && (!hasReportType || x.IncidentReport.ReportType == reportType))
+            .Select(x => new { x.AlertTrigger!.TriggeredAt, x.RecipientUserId })
+            .Distinct()
+            .ToListAsync(cancellationToken);
+        var uniqueRecipientsTrend = BucketCounts(recipientBucketPairs.Select(x => x.TriggeredAt).ToList(), fromDate, toDate);
+
         var alertsByStatus = await triggersInRange
             .GroupBy(x => x.Status)
             .Select(g => new AlertStatusCountDto { Status = g.Key, Count = g.Count() })
@@ -119,7 +176,7 @@ public class AlertDashboardService : IAlertDashboardService
             .GroupBy(x => new { x.AlertRuleId, x.AlertRule.RuleId, x.AlertRule.Name })
             .Select(g => new AlertRuleCountDto { AlertRuleId = g.Key.AlertRuleId, RuleId = g.Key.RuleId, RuleName = g.Key.Name, Count = g.Count() })
             .OrderByDescending(x => x.Count)
-            .Take(8)
+            .Take(5)
             .ToListAsync(cancellationToken);
 
         var notificationsByChannel = await ApplyNotificationUserScope(_db.IncidentNotifications)
@@ -151,17 +208,25 @@ public class AlertDashboardService : IAlertDashboardService
         {
             TotalRules = totalRules,
             ActiveRules = activeRules,
+            InactiveRules = totalRules - activeRules,
+            ImmediateEscalatedRules = immediateEscalatedRules,
+            MedicationErrorRules = medicationErrorRules,
+            AdrRules = adrRules,
             CriticalAlerts = criticalAlerts,
             AlertsTriggered = alertsTriggered,
             NotificationsSent = notificationsSent,
             UniqueRecipients = uniqueRecipients,
             AlertsOverTime = alertsOverTime,
+            CriticalAlertsTrend = criticalAlertsTrend,
+            NotificationsSentTrend = notificationsSentTrend,
+            UniqueRecipientsTrend = uniqueRecipientsTrend,
             AlertsByStatus = alertsByStatus,
             AlertsByReportType = alertsByReportType,
             AlertsByRule = alertsByRule,
             NotificationsByChannel = notificationsByChannel,
             AlertsByUrgency = alertsByUrgency,
-            TopRecipients = topRecipients
+            TopRecipients = topRecipients,
+            FieldUsage = fieldUsage
         };
     }
 

@@ -112,6 +112,14 @@ public class AlertRuleService : IAlertRuleService
             .Select(g => new { AlertRuleId = g.Key, Count = g.Count() })
             .ToDictionaryAsync(x => x.AlertRuleId, x => x.Count, cancellationToken);
 
+        var reportTypeValues = await _db.AlertRuleConditions
+            .Where(c => ruleIds.Contains(c.AlertRuleId) && c.ConditionField.Code == "REPORT_TYPE")
+            .SelectMany(c => c.Values.Select(v => new { c.AlertRuleId, v.TextValue }))
+            .ToListAsync(cancellationToken);
+        var appliesToByRule = reportTypeValues
+            .GroupBy(x => x.AlertRuleId)
+            .ToDictionary(g => g.Key, g => string.Join(", ", g.Select(x => x.TextValue).Where(v => !string.IsNullOrEmpty(v)).Distinct()));
+
         return rules.Select(r => new AlertRuleListItemDto
         {
             Id = r.Id,
@@ -125,6 +133,7 @@ public class AlertRuleService : IAlertRuleService
             IsEnabled = r.Enabled,
             ConditionCount = conditionCounts.GetValueOrDefault(r.Id),
             RecipientCount = recipientCounts.GetValueOrDefault(r.Id),
+            AppliesTo = string.IsNullOrEmpty(appliesToByRule.GetValueOrDefault(r.Id)) ? "All Types" : appliesToByRule[r.Id],
             LastTriggeredAt = r.LastTriggered,
             CreatedAt = r.CreatedAt,
         }).ToList();

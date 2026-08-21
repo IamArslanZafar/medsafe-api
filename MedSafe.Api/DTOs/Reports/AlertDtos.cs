@@ -97,6 +97,9 @@ public sealed class AlertRuleListItemDto
     public bool IsEnabled { get; set; }
     public int ConditionCount { get; set; }
     public int RecipientCount { get; set; }
+    // Read off the rule's own REPORT_TYPE condition value(s) — "All Types" when
+    // the rule has no REPORT_TYPE condition at all (matches every report type).
+    public string AppliesTo { get; set; } = "All Types";
     public DateTime? LastTriggeredAt { get; set; }
     public DateTime CreatedAt { get; set; }
 }
