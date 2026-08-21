@@ -2,7 +2,6 @@ using Microsoft.EntityFrameworkCore;
 using MedSafe.Infrastructure.Data;
 using MedSafe.Models;
 using QuestPDF.Fluent;
-using QuestPDF.Helpers;
 using QuestPDF.Infrastructure;
 
 namespace MedSafeAPI.Services;
@@ -62,7 +61,7 @@ public class IncidentReportPdfService : IIncidentReportPdfService
             {
                 page.Size(950, 650);
                 page.Margin(40);
-                page.DefaultTextStyle(x => x.FontSize(9).FontColor(TextDark).FontFamily(Fonts.Calibri));
+                page.DefaultTextStyle(x => x.FontSize(9).FontColor(TextDark).FontFamily("Rubik"));
 
                 // Header is composed as the first item of Content (not via page.Header(),
                 // which QuestPDF repeats on every page) — matches the frontend, which
@@ -404,13 +403,13 @@ public class IncidentReportPdfService : IIncidentReportPdfService
                 {
                     row.RelativeItem().Background(tint ? RowTint : "#ffffff").Border(0.6f).BorderColor(Border).Padding(4).Row(cell =>
                     {
-                        cell.ConstantItem(85).Text(label).FontSize(8).Bold().FontColor(TextMuted);
+                        cell.ConstantItem(85).Text(label).FontSize(8).Bold().FontColor(Navy);
                         cell.RelativeItem().BorderLeft(0.6f).BorderColor(Border).PaddingLeft(8).Element(e =>
                         {
                             if (badge.HasValue)
                                 Pill(e, badge.Value.label, badge.Value.bg, badge.Value.color);
                             else
-                                e.Text(value).FontSize(9).Bold().FontColor(TextDark);
+                                e.Text(value).FontSize(9).FontColor(TextDark);
                         });
                     });
                 }
@@ -425,7 +424,7 @@ public class IncidentReportPdfService : IIncidentReportPdfService
         var tint = nextStripe();
         col.Item().Background(tint ? RowTint : "#ffffff").Border(0.6f).BorderColor(Border).Padding(6).Row(row =>
         {
-            row.ConstantItem(150).Text(label).FontSize(8).Bold().FontColor(TextMuted);
+            row.ConstantItem(150).Text(label).FontSize(8).Bold().FontColor(Navy);
             row.RelativeItem().BorderLeft(0.6f).BorderColor(Border).PaddingLeft(8)
                 .Text(string.IsNullOrWhiteSpace(value) ? "—" : value).FontSize(9).FontColor(TextDark);
         });

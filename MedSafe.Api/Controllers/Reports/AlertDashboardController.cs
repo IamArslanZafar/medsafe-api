@@ -5,12 +5,13 @@ using MedSafeAPI.DTOs;
 
 namespace MedSafeAPI.Controllers;
 
-// Admin only — this dashboard gives broad visibility into recipients, email
-// delivery, and every report/rule's activity, unlike the per-user notification
-// bell (api/notifications) or the Physician-visible Alert Rules list (api/alerts).
+// Any authenticated user — same trust model as DashboardController (the main
+// Dashboard): access is gated by the frontend's view_alert_triggers_dashboard
+// permission tag (Roles & Permissions), not a hardcoded role name, so a custom
+// role granted that tag actually gets data instead of silent all-zero results.
 [ApiController]
 [Route("api/alerts/dashboard")]
-[Authorize(Roles = "Admin")]
+[Authorize]
 public class AlertDashboardController : ControllerBase
 {
     private readonly IAlertDashboardService _dashboardService;
@@ -23,9 +24,9 @@ public class AlertDashboardController : ControllerBase
     }
 
     [HttpGet("overview")]
-    public async Task<IActionResult> Overview([FromQuery] DateTime? from, [FromQuery] DateTime? to, CancellationToken cancellationToken)
+    public async Task<IActionResult> Overview([FromQuery] DateTime? from, [FromQuery] DateTime? to, [FromQuery] string? reportType, CancellationToken cancellationToken)
     {
-        var result = await _dashboardService.GetOverviewAsync(from, to, cancellationToken);
+        var result = await _dashboardService.GetOverviewAsync(from, to, reportType, cancellationToken);
         return Ok(result);
     }
 

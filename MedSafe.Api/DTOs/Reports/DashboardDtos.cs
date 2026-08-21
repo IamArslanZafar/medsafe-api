@@ -68,7 +68,6 @@ public sealed class DashboardTrendDto
     // when no startDate/endDate is passed.
     public List<string> Labels { get; set; } = new();
     public List<int> MedicationErrors { get; set; } = new();
-    public List<int> NearMisses { get; set; } = new();
     public List<int> Adr { get; set; } = new();
     // Severity E-I on that day, regardless of report type — same definition as the top-level HarmEvents KPI.
     public List<int> HarmEvents { get; set; } = new();

@@ -95,7 +95,6 @@ public class AlertsController : ControllerBase
                 values =
                 [
                     new() { Value = "Medication Error", Label = "Medication Error" },
-                    new() { Value = "Near Miss", Label = "Near Miss" },
                     new() { Value = "ADR", Label = "ADR Reaction" }
                 ];
                 break;

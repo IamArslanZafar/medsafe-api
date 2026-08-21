@@ -15,6 +15,12 @@ public sealed class AlertStatusCountDto
     public int Count { get; set; }
 }
 
+public sealed class AlertReportTypeCountDto
+{
+    public string ReportType { get; set; } = string.Empty;
+    public int Count { get; set; }
+}
+
 public sealed class AlertRuleCountDto
 {
     public int AlertRuleId { get; set; }
@@ -56,6 +62,7 @@ public sealed class AlertDashboardOverviewDto
     public int UniqueRecipients { get; set; }
     public List<AlertTrendPointDto> AlertsOverTime { get; set; } = [];
     public List<AlertStatusCountDto> AlertsByStatus { get; set; } = [];
+    public List<AlertReportTypeCountDto> AlertsByReportType { get; set; } = [];
     public List<AlertRuleCountDto> AlertsByRule { get; set; } = [];
     public List<NotificationChannelCountDto> NotificationsByChannel { get; set; } = [];
     public List<AlertUrgencyCountDto> AlertsByUrgency { get; set; } = [];

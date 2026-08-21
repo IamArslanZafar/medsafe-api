@@ -29,6 +29,14 @@
     <Content Include="Assets\logo-with-bg.png">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
+    <!-- Rubik, registered with QuestPDF at startup so the emailed report PDF's
+         labels/values render in the same font as the web View Report modal. -->
+    <Content Include="Assets\Fonts\Rubik-Regular.ttf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="Assets\Fonts\Rubik-Bold.ttf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
   </ItemGroup>
 
   <ItemGroup>

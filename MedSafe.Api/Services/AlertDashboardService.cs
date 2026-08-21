@@ -12,23 +12,51 @@ public class AlertDashboardService : IAlertDashboardService
     private const int MaxExportRows = 10000;
 
     private readonly AppDbContext _db;
+    private readonly ICurrentUserService _currentUser;
 
-    public AlertDashboardService(AppDbContext db)
+    public AlertDashboardService(AppDbContext db, ICurrentUserService currentUser)
     {
         _db = db;
+        _currentUser = currentUser;
     }
 
-    public async Task<AlertDashboardOverviewDto> GetOverviewAsync(DateTime? from, DateTime? to, CancellationToken cancellationToken)
+    // Admin sees every alert system-wide. Everyone else gets exactly the same
+    // "apna apna" scope already used for the Reports Hub's default view
+    // (IncidentReportService.ApplyScopeFilter): alerts tied to a report they
+    // submitted, review, or were personally notified about — not other users'.
+    private IQueryable<AlertTriggerHistory> ApplyUserScope(IQueryable<AlertTriggerHistory> query)
+    {
+        if (_currentUser.Role == "Admin") return query;
+        var userId = _currentUser.UserId;
+        return query.Where(x =>
+            x.IncidentReport.SubmittedByUserId == userId ||
+            (x.IncidentReport.Review != null && x.IncidentReport.Review.ReviewerUserId == userId) ||
+            x.Notifications.Any(n => n.RecipientUserId == userId));
+    }
+
+    private IQueryable<IncidentNotification> ApplyNotificationUserScope(IQueryable<IncidentNotification> query)
+    {
+        if (_currentUser.Role == "Admin") return query;
+        var userId = _currentUser.UserId;
+        return query.Where(x =>
+            x.IncidentReport.SubmittedByUserId == userId ||
+            (x.IncidentReport.Review != null && x.IncidentReport.Review.ReviewerUserId == userId) ||
+            x.RecipientUserId == userId);
+    }
+
+    public async Task<AlertDashboardOverviewDto> GetOverviewAsync(DateTime? from, DateTime? to, string? reportType, CancellationToken cancellationToken)
     {
         var toDate = (to ?? DateTime.UtcNow).Date;
         var fromDate = (from ?? toDate.AddDays(-6)).Date;
         var rangeEndExclusive = toDate.AddDays(1);
+        var hasReportType = !string.IsNullOrWhiteSpace(reportType);
 
         var totalRules = await _db.AlertRules.CountAsync(x => !x.IsDeleted, cancellationToken);
         var activeRules = await _db.AlertRules.CountAsync(x => !x.IsDeleted && x.Enabled, cancellationToken);
 
-        var triggersInRange = _db.AlertTriggerHistories
-            .Where(x => x.TriggeredAt >= fromDate && x.TriggeredAt < rangeEndExclusive);
+        var triggersInRange = ApplyUserScope(_db.AlertTriggerHistories)
+            .Where(x => x.TriggeredAt >= fromDate && x.TriggeredAt < rangeEndExclusive
+                && (!hasReportType || x.IncidentReport.ReportType == reportType));
 
         var alertsTriggered = await triggersInRange.CountAsync(cancellationToken);
 
@@ -36,14 +64,16 @@ public class AlertDashboardService : IAlertDashboardService
             .Where(x => x.Urgency != null && CriticalUrgencyCodes.Contains(x.Urgency.Code))
             .CountAsync(cancellationToken);
 
-        var notificationsSent = await _db.IncidentNotifications
+        var notificationsSent = await ApplyNotificationUserScope(_db.IncidentNotifications)
             .Where(x => x.AlertTriggerId != null && x.Status == "SENT"
-                && x.AlertTrigger!.TriggeredAt >= fromDate && x.AlertTrigger.TriggeredAt < rangeEndExclusive)
+                && x.AlertTrigger!.TriggeredAt >= fromDate && x.AlertTrigger.TriggeredAt < rangeEndExclusive
+                && (!hasReportType || x.IncidentReport.ReportType == reportType))
             .CountAsync(cancellationToken);
 
-        var uniqueRecipients = await _db.IncidentNotifications
+        var uniqueRecipients = await ApplyNotificationUserScope(_db.IncidentNotifications)
             .Where(x => x.AlertTriggerId != null && x.RecipientUserId != null
-                && x.AlertTrigger!.TriggeredAt >= fromDate && x.AlertTrigger.TriggeredAt < rangeEndExclusive)
+                && x.AlertTrigger!.TriggeredAt >= fromDate && x.AlertTrigger.TriggeredAt < rangeEndExclusive
+                && (!hasReportType || x.IncidentReport.ReportType == reportType))
             .Select(x => x.RecipientUserId)
             .Distinct()
             .CountAsync(cancellationToken);
@@ -62,6 +92,13 @@ public class AlertDashboardService : IAlertDashboardService
             .Select(g => new AlertStatusCountDto { Status = g.Key, Count = g.Count() })
             .ToListAsync(cancellationToken);
 
+        var alertsByReportType = await triggersInRange
+            .Where(x => x.IncidentReport.ReportType != "Near Miss")
+            .GroupBy(x => x.IncidentReport.ReportType)
+            .Select(g => new AlertReportTypeCountDto { ReportType = g.Key, Count = g.Count() })
+            .OrderByDescending(x => x.Count)
+            .ToListAsync(cancellationToken);
+
         var alertsByRule = await triggersInRange
             .GroupBy(x => new { x.AlertRuleId, x.AlertRule.RuleId, x.AlertRule.Name })
             .Select(g => new AlertRuleCountDto { AlertRuleId = g.Key.AlertRuleId, RuleId = g.Key.RuleId, RuleName = g.Key.Name, Count = g.Count() })
@@ -69,9 +106,10 @@ public class AlertDashboardService : IAlertDashboardService
             .Take(8)
             .ToListAsync(cancellationToken);
 
-        var notificationsByChannel = await _db.IncidentNotifications
+        var notificationsByChannel = await ApplyNotificationUserScope(_db.IncidentNotifications)
             .Where(x => x.AlertTriggerId != null && x.NotificationMethod != null
-                && x.AlertTrigger!.TriggeredAt >= fromDate && x.AlertTrigger.TriggeredAt < rangeEndExclusive)
+                && x.AlertTrigger!.TriggeredAt >= fromDate && x.AlertTrigger.TriggeredAt < rangeEndExclusive
+                && (!hasReportType || x.IncidentReport.ReportType == reportType))
             .GroupBy(x => new { x.NotificationMethod!.Code, x.NotificationMethod.Name })
             .Select(g => new NotificationChannelCountDto { MethodCode = g.Key.Code, MethodName = g.Key.Name, Count = g.Count() })
             .ToListAsync(cancellationToken);
@@ -83,9 +121,10 @@ public class AlertDashboardService : IAlertDashboardService
             .OrderByDescending(x => x.Count)
             .ToListAsync(cancellationToken);
 
-        var topRecipients = await _db.IncidentNotifications
+        var topRecipients = await ApplyNotificationUserScope(_db.IncidentNotifications)
             .Where(x => x.AlertTriggerId != null && x.RecipientUserId != null
-                && x.AlertTrigger!.TriggeredAt >= fromDate && x.AlertTrigger.TriggeredAt < rangeEndExclusive)
+                && x.AlertTrigger!.TriggeredAt >= fromDate && x.AlertTrigger.TriggeredAt < rangeEndExclusive
+                && (!hasReportType || x.IncidentReport.ReportType == reportType))
             .GroupBy(x => new { x.RecipientUserId, x.RecipientUser!.Name, x.RecipientUser.Email })
             .Select(g => new AlertTopRecipientDto { UserId = g.Key.RecipientUserId!.Value, Name = g.Key.Name, Email = g.Key.Email, Count = g.Count() })
             .OrderByDescending(x => x.Count)
@@ -102,6 +141,7 @@ public class AlertDashboardService : IAlertDashboardService
             UniqueRecipients = uniqueRecipients,
             AlertsOverTime = alertsOverTime,
             AlertsByStatus = alertsByStatus,
+            AlertsByReportType = alertsByReportType,
             AlertsByRule = alertsByRule,
             NotificationsByChannel = notificationsByChannel,
             AlertsByUrgency = alertsByUrgency,
@@ -111,7 +151,7 @@ public class AlertDashboardService : IAlertDashboardService
 
     private IQueryable<AlertTriggerHistory> BuildFilteredQuery(AlertTriggerFilterRequest request)
     {
-        var query = _db.AlertTriggerHistories.AsNoTracking().AsQueryable();
+        var query = ApplyUserScope(_db.AlertTriggerHistories.AsNoTracking().AsQueryable());
 
         if (!string.IsNullOrWhiteSpace(request.Search))
         {
@@ -212,8 +252,7 @@ public class AlertDashboardService : IAlertDashboardService
 
     public async Task<AlertTriggerDetailDto?> GetTriggerDetailAsync(long id, CancellationToken cancellationToken)
     {
-        var trigger = await _db.AlertTriggerHistories
-            .AsNoTracking()
+        var trigger = await ApplyUserScope(_db.AlertTriggerHistories.AsNoTracking())
             .Include(x => x.AlertRule).ThenInclude(r => r.MatchMode)
             .Include(x => x.IncidentReport)
             .FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
@@ -319,7 +358,7 @@ public class AlertDashboardService : IAlertDashboardService
             Methods = methods,
             Statuses = ["OPEN", "ACKNOWLEDGED", "RESOLVED"],
             DeliveryStatuses = ["PENDING", "SENT", "FAILED"],
-            ReportTypes = ["Medication Error", "Near Miss", "ADR"],
+            ReportTypes = ["Medication Error", "ADR"],
             TriggerSources =
             [
                 new AlertDashboardFilterSourceDto { Code = "REPORT_SUBMISSION", Name = "Incident Report" },
@@ -331,7 +370,7 @@ public class AlertDashboardService : IAlertDashboardService
 
     public async Task<AlertTriggerStatusResponseDto?> AcknowledgeAsync(long id, int userId, CancellationToken cancellationToken)
     {
-        var trigger = await _db.AlertTriggerHistories.FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
+        var trigger = await ApplyUserScope(_db.AlertTriggerHistories).FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
         if (trigger == null) return null;
 
         trigger.Status = "ACKNOWLEDGED";
@@ -344,7 +383,7 @@ public class AlertDashboardService : IAlertDashboardService
 
     public async Task<AlertTriggerStatusResponseDto?> ResolveAsync(long id, int userId, CancellationToken cancellationToken)
     {
-        var trigger = await _db.AlertTriggerHistories.FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
+        var trigger = await ApplyUserScope(_db.AlertTriggerHistories).FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
         if (trigger == null) return null;
 
         trigger.Status = "RESOLVED";

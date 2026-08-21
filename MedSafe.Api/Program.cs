@@ -12,6 +12,19 @@ using MedSafeAPI.Services;
 
 QuestPDF.Settings.License = QuestPDF.Infrastructure.LicenseType.Community;
 
+// Registers Rubik (both weights present in the TTF's own metadata, so QuestPDF's
+// .Bold() modifier on FontFamily("Rubik") picks the bold file automatically) so
+// the emailed incident report PDF matches the web View Report modal's font.
+foreach (var fontFile in new[] { "Rubik-Regular.ttf", "Rubik-Bold.ttf" })
+{
+    var path = Path.Combine(AppContext.BaseDirectory, "Assets", "Fonts", fontFile);
+    if (File.Exists(path))
+    {
+        using var stream = File.OpenRead(path);
+        QuestPDF.Drawing.FontManager.RegisterFont(stream);
+    }
+}
+
 var builder = WebApplication.CreateBuilder(args);
 
 // EF Core

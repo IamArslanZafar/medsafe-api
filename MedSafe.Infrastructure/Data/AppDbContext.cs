@@ -946,7 +946,8 @@ public class AppDbContext : DbContext
             new SystemModule { Id = 6, Name = "Feedback", Description = "Submitting and reviewing app feedback", DisplayOrder = 6 },
             new SystemModule { Id = 7, Name = "Audit Log", Description = "Viewing the HIPAA audit trail", DisplayOrder = 7 },
             new SystemModule { Id = 8, Name = "Dashboard", Description = "Viewing analytics dashboard", DisplayOrder = 8 },
-            new SystemModule { Id = 9, Name = "Training & Support", Description = "Viewing training/reference and support resources", DisplayOrder = 9 }
+            new SystemModule { Id = 9, Name = "Training & Support", Description = "Viewing training/reference and support resources", DisplayOrder = 9 },
+            new SystemModule { Id = 10, Name = "Notifications", Description = "Viewing the in-app notification bell", DisplayOrder = 10 }
         );
 
         modelBuilder.Entity<Permission>().HasData(
@@ -983,7 +984,11 @@ public class AppDbContext : DbContext
             new Permission { Id = 21, Name = "View Dashboard", PermissionTag = "dashboard.view", ParentId = 20, SystemModuleId = 8 },
 
             new Permission { Id = 22, Name = "Training & Support", PermissionTag = "training", ParentId = null, SystemModuleId = 9 },
-            new Permission { Id = 23, Name = "View Training & Support", PermissionTag = "training.view", ParentId = 22, SystemModuleId = 9 }
+            new Permission { Id = 23, Name = "View Training & Support", PermissionTag = "training.view", ParentId = 22, SystemModuleId = 9 },
+
+            new Permission { Id = 27, Name = "View Notifications", PermissionTag = "notifications.view", ParentId = null, SystemModuleId = 10 },
+
+            new Permission { Id = 28, Name = "View Reports Hub", PermissionTag = "incident_reports.view_hub", ParentId = null, SystemModuleId = 1 }
         );
 
         // Admin = every permission. Physician = clinical review + report basics.
@@ -997,10 +1002,16 @@ public class AppDbContext : DbContext
         // is opt-out, not opt-in, on top of the existing baseline. View Alert
         // Triggers Dashboard (26) is a standalone permission alongside View/Manage
         // Alert Rules — only Admin gets it by default, same as 8/9/10 were before.
-        var adminAll = Enumerable.Range(1, 26).Select(pid => new RolePermission { RoleId = 3, PermissionId = pid });
-        var physician = new[] { 1, 3, 5, 6, 7, 20, 21, 22, 23 }.Select(pid => new RolePermission { RoleId = 2, PermissionId = pid });
-        var nurse = new[] { 1, 2, 15, 16, 20, 21, 22, 23, 24, 25 }.Select(pid => new RolePermission { RoleId = 1, PermissionId = pid });
-        var pharmacist = new[] { 1, 2, 20, 21, 22, 23, 24, 25 }.Select(pid => new RolePermission { RoleId = 4, PermissionId = pid });
+        // View Notifications (27) defaults to every role — the notification bell
+        // had no permission gate at all before this, so nobody loses it by default.
+        // View Reports Hub (28) is a standalone sibling of Incident Reports (1),
+        // not a child of it — a tree parent's checked state is derived from its
+        // children (see AssignPermissionsModal.jsx), so Reports Hub visibility
+        // can't hang off that. Granted wherever 1 already is, matching current access.
+        var adminAll = Enumerable.Range(1, 28).Select(pid => new RolePermission { RoleId = 3, PermissionId = pid });
+        var physician = new[] { 1, 3, 5, 6, 7, 20, 21, 22, 23, 27, 28 }.Select(pid => new RolePermission { RoleId = 2, PermissionId = pid });
+        var nurse = new[] { 1, 2, 15, 16, 20, 21, 22, 23, 24, 25, 27, 28 }.Select(pid => new RolePermission { RoleId = 1, PermissionId = pid });
+        var pharmacist = new[] { 1, 2, 20, 21, 22, 23, 24, 25, 27, 28 }.Select(pid => new RolePermission { RoleId = 4, PermissionId = pid });
 
         modelBuilder.Entity<RolePermission>().HasData(
             adminAll.Concat(physician).Concat(nurse).Concat(pharmacist).ToArray()

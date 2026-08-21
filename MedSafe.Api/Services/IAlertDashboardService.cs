@@ -21,7 +21,7 @@ public sealed class AlertTriggerFilterRequest
 
 public interface IAlertDashboardService
 {
-    Task<AlertDashboardOverviewDto> GetOverviewAsync(DateTime? from, DateTime? to, CancellationToken cancellationToken);
+    Task<AlertDashboardOverviewDto> GetOverviewAsync(DateTime? from, DateTime? to, string? reportType, CancellationToken cancellationToken);
     Task<AlertTriggerListResponse> GetTriggersAsync(AlertTriggerFilterRequest request, CancellationToken cancellationToken);
     Task<AlertTriggerDetailDto?> GetTriggerDetailAsync(long id, CancellationToken cancellationToken);
     Task<AlertDashboardFilterOptionsDto> GetFilterOptionsAsync(CancellationToken cancellationToken);

@@ -129,16 +129,33 @@ public class DashboardService : IDashboardService
 
         var alertRuleSummary = await _alertRuleService.GetSummaryAsync(cancellationToken);
 
-        var dayCount = (actualEndDate - actualStartDate).Days + 1;
-        var days = Enumerable.Range(0, dayCount).Select(i => actualStartDate.AddDays(i)).ToList();
-        var trend = new DashboardTrendDto
+        // A single-day range (Today/Yesterday) bucketed by day collapses to one
+        // data point — not a usable trend line. Bucket by hour instead whenever
+        // the range is exactly one day; multi-day ranges stay day-bucketed.
+        DashboardTrendDto trend;
+        if (actualStartDate == actualEndDate)
         {
-            Labels = days.Select(d => d.ToString("dd MMM")).ToList(),
-            MedicationErrors = days.Select(d => reports.Count(r => r.ReportType == "Medication Error" && r.SubmittedAt.Date == d)).ToList(),
-            NearMisses = days.Select(d => reports.Count(r => r.ReportType == "Near Miss" && r.SubmittedAt.Date == d)).ToList(),
-            Adr = days.Select(d => reports.Count(r => r.ReportType == "ADR" && r.SubmittedAt.Date == d)).ToList(),
-            HarmEvents = days.Select(d => reports.Count(r => HarmCodes.Contains(r.HarmLevelCode) && r.SubmittedAt.Date == d)).ToList(),
-        };
+            var hours = Enumerable.Range(0, 24).ToList();
+            trend = new DashboardTrendDto
+            {
+                Labels = hours.Select(h => new DateTime(1, 1, 1, h, 0, 0).ToString("h tt")).ToList(),
+                MedicationErrors = hours.Select(h => reports.Count(r => r.ReportType == "Medication Error" && r.SubmittedAt.Date == actualStartDate && r.SubmittedAt.Hour == h)).ToList(),
+                Adr = hours.Select(h => reports.Count(r => r.ReportType == "ADR" && r.SubmittedAt.Date == actualStartDate && r.SubmittedAt.Hour == h)).ToList(),
+                HarmEvents = hours.Select(h => reports.Count(r => HarmCodes.Contains(r.HarmLevelCode) && r.SubmittedAt.Date == actualStartDate && r.SubmittedAt.Hour == h)).ToList(),
+            };
+        }
+        else
+        {
+            var dayCount = (actualEndDate - actualStartDate).Days + 1;
+            var days = Enumerable.Range(0, dayCount).Select(i => actualStartDate.AddDays(i)).ToList();
+            trend = new DashboardTrendDto
+            {
+                Labels = days.Select(d => d.ToString("dd MMM")).ToList(),
+                MedicationErrors = days.Select(d => reports.Count(r => r.ReportType == "Medication Error" && r.SubmittedAt.Date == d)).ToList(),
+                Adr = days.Select(d => reports.Count(r => r.ReportType == "ADR" && r.SubmittedAt.Date == d)).ToList(),
+                HarmEvents = days.Select(d => reports.Count(r => HarmCodes.Contains(r.HarmLevelCode) && r.SubmittedAt.Date == d)).ToList(),
+            };
+        }
 
         return new DashboardSummaryDto
         {
