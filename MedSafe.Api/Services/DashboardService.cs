@@ -7,12 +7,8 @@ namespace MedSafeAPI.Services;
 
 public class DashboardService : IDashboardService
 {
-    // Mirrors the frontend's fixed 5-bucket process-stage taxonomy (see PROCESS_STAGES
-    // in the frontend's taxonomy.js) — the lookup table's Name is free text, so bucket
-    // by substring match the same way the frontend does.
-    private static readonly string[] StageKeys = ["Prescribing", "Transcribing", "Dispensing", "Administration", "Monitoring"];
-    private static readonly string[] SeverityCodes = ["A", "B", "C", "D", "E", "F", "G", "H", "I"];
     private static readonly string[] HarmCodes = ["E", "F", "G", "H", "I"];
+    private static readonly string[] NccMerpCodes = ["A", "B", "C", "D", "E", "F", "G", "H", "I"];
 
     private readonly AppDbContext _db;
     private readonly ICurrentUserService _currentUser;
@@ -82,33 +78,34 @@ public class DashboardService : IDashboardService
 
         var reports = await query.ToListAsync(cancellationToken);
 
-        var stageNames = await _db.StageOfProcesses.AsNoTracking()
-            .ToDictionaryAsync(s => s.Id, s => s.Name, cancellationToken);
+        var patientOutcomeNames = await _db.PatientOutcomes.AsNoTracking()
+            .ToDictionaryAsync(p => p.Id, p => p.Name, cancellationToken);
+        var contributingFactorNames = await _db.ContributingFactors.AsNoTracking()
+            .ToDictionaryAsync(c => c.Id, c => c.Name, cancellationToken);
         var errorCategoryNames = await _db.ErrorCategories.AsNoTracking()
             .ToDictionaryAsync(e => e.Id, e => e.Name, cancellationToken);
+        var stageNames = await _db.StageOfProcesses.AsNoTracking()
+            .ToDictionaryAsync(s => s.Id, s => s.Name, cancellationToken);
+        var reportedSeverityNames = await _db.ReportedIncidentSeverities.AsNoTracking()
+            .ToDictionaryAsync(s => s.Id, s => s.Name, cancellationToken);
+        var adrSeverityNames = await _db.AdrSeverities.AsNoTracking()
+            .ToDictionaryAsync(s => s.Id, s => s.Name, cancellationToken);
+        var seriousnessCriterionNames = await _db.SeriousnessCriteria.AsNoTracking()
+            .ToDictionaryAsync(s => s.Id, s => s.Name, cancellationToken);
+        var reportingSourceNames = await _db.ReportingSources.AsNoTracking()
+            .ToDictionaryAsync(s => s.Id, s => s.Name, cancellationToken);
 
         var total = reports.Count;
         var harmCount = reports.Count(r => HarmCodes.Contains(r.HarmLevelCode));
         var nearMissCount = reports.Count(r => r.ReportType == "Near Miss");
         var adrCount = reports.Count(r => r.ReportType == "ADR");
         var errorCount = reports.Count(r => r.ReportType == "Medication Error");
-        var pendingReview = reports.Count(r => r.ReportStatus == "Pending" || r.ReportStatus == "UnderReview");
+        var pendingOnlyCount = reports.Count(r => r.ReportStatus == "Pending");
+        var underReviewCount = reports.Count(r => r.ReportStatus == "UnderReview");
         var closedCount = reports.Count(r => r.ReportStatus == "Closed");
-
-        var stageLookup = StageKeys.ToDictionary(k => k, _ => 0, StringComparer.OrdinalIgnoreCase);
-        foreach (var r in reports)
-        {
-            if (r.StageOfProcessId is null || !stageNames.TryGetValue(r.StageOfProcessId.Value, out var name))
-                continue;
-            var matched = StageKeys.FirstOrDefault(k => name.Contains(k, StringComparison.OrdinalIgnoreCase));
-            if (matched != null) stageLookup[matched]++;
-        }
-
-        var severityLookup = SeverityCodes.ToDictionary(c => c, _ => 0);
-        foreach (var r in reports)
-            // ADR reports have no NCC MERP harm level — HarmLevelCode is null for them.
-            if (r.HarmLevelCode != null && severityLookup.ContainsKey(r.HarmLevelCode))
-                severityLookup[r.HarmLevelCode]++;
+        var overdueCount = reports.Count(r =>
+            (r.ReportStatus == "Pending" || r.ReportStatus == "UnderReview")
+            && (DateTime.UtcNow - r.SubmittedAt).TotalHours > 48);
 
         var topMedications = reports
             .SelectMany(r => r.Medications)
@@ -119,13 +116,127 @@ public class DashboardService : IDashboardService
             .Take(10)
             .ToList();
 
-        var errorTypes = reports
-            .Where(r => r.ErrorCategoryId.HasValue && errorCategoryNames.ContainsKey(r.ErrorCategoryId.Value))
-            .GroupBy(r => errorCategoryNames[r.ErrorCategoryId!.Value])
+        var meReports = reports.Where(r => r.ReportType == "Medication Error").ToList();
+        var adrReports = reports.Where(r => r.ReportType == "ADR").ToList();
+
+        var topMeMedications = meReports
+            .SelectMany(r => r.Medications)
+            .Where(m => !string.IsNullOrWhiteSpace(m.MedicationName))
+            .GroupBy(m => m.MedicationName)
             .Select(g => new DashboardNamedCountDto { Name = g.Key, Count = g.Count() })
             .OrderByDescending(x => x.Count)
             .Take(6)
             .ToList();
+
+        var topAdrMedications = adrReports
+            .SelectMany(r => r.Medications)
+            .Where(m => !string.IsNullOrWhiteSpace(m.MedicationName))
+            .GroupBy(m => m.MedicationName)
+            .Select(g => new DashboardNamedCountDto { Name = g.Key, Count = g.Count() })
+            .OrderByDescending(x => x.Count)
+            .Take(6)
+            .ToList();
+
+        var topLocations = reports
+            .Where(r => !string.IsNullOrWhiteSpace(r.IncidentLocation))
+            .GroupBy(r => r.IncidentLocation)
+            .Select(g => new DashboardNamedCountDto { Name = g.Key, Count = g.Count() })
+            .OrderByDescending(x => x.Count)
+            .Take(5)
+            .ToList();
+
+        var patientOutcomeOverall = reports
+            .Where(r => patientOutcomeNames.ContainsKey(r.PatientOutcomeId))
+            .GroupBy(r => patientOutcomeNames[r.PatientOutcomeId])
+            .Select(g => new DashboardNamedCountDto { Name = g.Key, Count = g.Count() })
+            .OrderByDescending(x => x.Count)
+            .Take(6)
+            .ToList();
+
+        var reportIds = reports.Select(r => r.Id).ToHashSet();
+        var contributingFactorsRaw = await _db.IncidentReportContributingFactors
+            .AsNoTracking()
+            .Where(cf => reportIds.Contains(cf.IncidentReportId))
+            .GroupBy(cf => cf.ContributingFactorId)
+            .Select(g => new { FactorId = g.Key, Count = g.Count() })
+            .ToListAsync(cancellationToken);
+        var contributingFactorsOverall = contributingFactorsRaw
+            .Where(x => contributingFactorNames.ContainsKey(x.FactorId))
+            .Select(x => new DashboardNamedCountDto { Name = contributingFactorNames[x.FactorId], Count = x.Count })
+            .OrderByDescending(x => x.Count)
+            .Take(6)
+            .ToList();
+
+        var reviewStatus = new List<DashboardNamedCountDto>
+        {
+            new() { Name = "Pending", Count = pendingOnlyCount },
+            new() { Name = "Under Review", Count = underReviewCount },
+            new() { Name = "Closed", Count = closedCount },
+            new() { Name = "Overdue >48h", Count = overdueCount },
+        };
+
+        // ── Medication Error Dashboard-only breakdowns ──
+        var errorCategoryBreakdown = meReports
+            .Where(r => r.ErrorCategoryId.HasValue && errorCategoryNames.ContainsKey(r.ErrorCategoryId.Value))
+            .GroupBy(r => errorCategoryNames[r.ErrorCategoryId!.Value])
+            .Select(g => new DashboardNamedCountDto { Name = g.Key, Count = g.Count() })
+            .OrderByDescending(x => x.Count).Take(6).ToList();
+
+        var stageOfProcessBreakdown = meReports
+            .Where(r => r.StageOfProcessId.HasValue && stageNames.ContainsKey(r.StageOfProcessId.Value))
+            .GroupBy(r => stageNames[r.StageOfProcessId!.Value])
+            .Select(g => new DashboardNamedCountDto { Name = g.Key, Count = g.Count() })
+            .OrderByDescending(x => x.Count).Take(6).ToList();
+
+        var nccMerpBreakdown = NccMerpCodes
+            .Select(c => new DashboardNamedCountDto { Name = c, Count = meReports.Count(r => r.HarmLevelCode == c) })
+            .ToList();
+
+        var reportedSeverityBreakdown = meReports
+            .Where(r => r.ReportedIncidentSeverityId.HasValue && reportedSeverityNames.ContainsKey(r.ReportedIncidentSeverityId.Value))
+            .GroupBy(r => reportedSeverityNames[r.ReportedIncidentSeverityId!.Value])
+            .Select(g => new DashboardNamedCountDto { Name = g.Key, Count = g.Count() })
+            .OrderByDescending(x => x.Count).Take(6).ToList();
+
+        // ── ADR Dashboard-only breakdowns ──
+        var adrSeverityBreakdown = adrReports
+            .Where(r => r.AdrSeverityId.HasValue && adrSeverityNames.ContainsKey(r.AdrSeverityId.Value))
+            .GroupBy(r => adrSeverityNames[r.AdrSeverityId!.Value])
+            .Select(g => new DashboardNamedCountDto { Name = g.Key, Count = g.Count() })
+            .OrderByDescending(x => x.Count).Take(6).ToList();
+
+        var whoUmcCausalityBreakdown = adrReports
+            .Where(r => !string.IsNullOrWhiteSpace(r.SuspectedCausality))
+            .GroupBy(r => r.SuspectedCausality!)
+            .Select(g => new DashboardNamedCountDto { Name = g.Key, Count = g.Count() })
+            .OrderByDescending(x => x.Count).ToList();
+
+        var reportingSourceBreakdown = adrReports
+            .Where(r => r.ReportingSourceId.HasValue && reportingSourceNames.ContainsKey(r.ReportingSourceId.Value))
+            .GroupBy(r => reportingSourceNames[r.ReportingSourceId!.Value])
+            .Select(g => new DashboardNamedCountDto { Name = g.Key, Count = g.Count() })
+            .OrderByDescending(x => x.Count).Take(6).ToList();
+
+        var adrReportIds = adrReports.Select(r => r.Id).ToHashSet();
+        var seriousnessRaw = await _db.IncidentReportSeriousnessCriteria
+            .AsNoTracking()
+            .Where(sc => adrReportIds.Contains(sc.IncidentReportId))
+            .GroupBy(sc => sc.SeriousnessCriterionId)
+            .Select(g => new { CriterionId = g.Key, Count = g.Count() })
+            .ToListAsync(cancellationToken);
+        var seriousnessCriteriaBreakdown = seriousnessRaw
+            .Where(x => seriousnessCriterionNames.ContainsKey(x.CriterionId))
+            .Select(x => new DashboardNamedCountDto { Name = seriousnessCriterionNames[x.CriterionId], Count = x.Count })
+            .OrderByDescending(x => x.Count).Take(6).ToList();
+
+        // A "serious" ADR is any ADR report with at least one linked Seriousness
+        // Criterion (hospitalization, life-threatening, etc. — ICH definition).
+        var seriousAdrCount = await _db.IncidentReportSeriousnessCriteria
+            .AsNoTracking()
+            .Where(sc => adrReportIds.Contains(sc.IncidentReportId))
+            .Select(sc => sc.IncidentReportId)
+            .Distinct()
+            .CountAsync(cancellationToken);
 
         var alertRuleSummary = await _alertRuleService.GetSummaryAsync(cancellationToken);
 
@@ -163,20 +274,34 @@ public class DashboardService : IDashboardService
             NearMissRatePct = total == 0 ? 0 : (int)Math.Round(nearMissCount * 100.0 / total),
             HarmEvents = harmCount,
             AdrReactions = adrCount,
-            PendingReview = pendingReview,
+            PendingReview = pendingOnlyCount,
+            UnderReviewCount = underReviewCount,
+            OverdueCount = overdueCount,
             Breakdown = new DashboardBreakdownDto
             {
                 MedicationErrors = errorCount,
                 NearMissReports = nearMissCount,
                 AdrReactions = adrCount,
                 ClosedResolved = closedCount,
-                PendingReview = pendingReview,
+                PendingReview = pendingOnlyCount + underReviewCount,
             },
             Trend = trend,
-            StageOfProcess = StageKeys.Select(k => new DashboardNamedCountDto { Name = k, Count = stageLookup[k] }).ToList(),
-            Severity = SeverityCodes.Select(c => new DashboardNamedCountDto { Name = c, Count = severityLookup[c] }).ToList(),
+            ReviewStatus = reviewStatus,
             TopMedications = topMedications,
-            ErrorTypesByNature = errorTypes,
+            TopMeMedications = topMeMedications,
+            TopAdrMedications = topAdrMedications,
+            TopLocations = topLocations,
+            PatientOutcomeOverall = patientOutcomeOverall,
+            ContributingFactorsOverall = contributingFactorsOverall,
+            ErrorCategoryBreakdown = errorCategoryBreakdown,
+            StageOfProcessBreakdown = stageOfProcessBreakdown,
+            NccMerpBreakdown = nccMerpBreakdown,
+            ReportedSeverityBreakdown = reportedSeverityBreakdown,
+            AdrSeverityBreakdown = adrSeverityBreakdown,
+            WhoUmcCausalityBreakdown = whoUmcCausalityBreakdown,
+            SeriousnessCriteriaBreakdown = seriousnessCriteriaBreakdown,
+            ReportingSourceBreakdown = reportingSourceBreakdown,
+            SeriousAdrCount = seriousAdrCount,
             FieldUsage = alertRuleSummary.FieldUsage,
             TotalAlertRules = alertRuleSummary.TotalRules,
             ActiveAlertRules = alertRuleSummary.ActiveRules,

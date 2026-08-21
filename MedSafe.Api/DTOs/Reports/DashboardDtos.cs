@@ -31,14 +31,42 @@ public sealed class DashboardSummaryDto
     public int NearMissRatePct { get; set; }
     public int HarmEvents { get; set; }
     public int AdrReactions { get; set; }
+    // Only ReportStatus == "Pending" — UnderReview is now its own separate count.
     public int PendingReview { get; set; }
+    public int UnderReviewCount { get; set; }
+    // Pending/UnderReview reports still unreviewed 48h+ after submission — same
+    // threshold as the automatic reviewer reminder (EmailNotificationWorker-adjacent
+    // business rule, documented on the Training & Support "Reporting SOP" tab).
+    public int OverdueCount { get; set; }
 
     public DashboardBreakdownDto Breakdown { get; set; } = new();
     public DashboardTrendDto Trend { get; set; } = new();
-    public List<DashboardNamedCountDto> StageOfProcess { get; set; } = new();
-    public List<DashboardNamedCountDto> Severity { get; set; } = new();
+    // Pending / Under Review / Closed / Overdue >48h, in that order.
+    public List<DashboardNamedCountDto> ReviewStatus { get; set; } = new();
+    // Overall — spans both report types.
     public List<DashboardNamedCountDto> TopMedications { get; set; } = new();
-    public List<DashboardNamedCountDto> ErrorTypesByNature { get; set; } = new();
+    public List<DashboardNamedCountDto> TopLocations { get; set; } = new();
+    public List<DashboardNamedCountDto> PatientOutcomeOverall { get; set; } = new();
+    public List<DashboardNamedCountDto> ContributingFactorsOverall { get; set; } = new();
+    // Medication Error / ADR-only top medications, for the two report-type-specific highlight cards.
+    public List<DashboardNamedCountDto> TopMeMedications { get; set; } = new();
+    public List<DashboardNamedCountDto> TopAdrMedications { get; set; } = new();
+
+    // Medication Error Dashboard-only (see AssignPermissionsModal's "Submit Medication
+    // Error Reports"-only view) — computed from this request's Medication Error reports only.
+    public List<DashboardNamedCountDto> ErrorCategoryBreakdown { get; set; } = new();
+    public List<DashboardNamedCountDto> StageOfProcessBreakdown { get; set; } = new();
+    public List<DashboardNamedCountDto> NccMerpBreakdown { get; set; } = new();
+    public List<DashboardNamedCountDto> ReportedSeverityBreakdown { get; set; } = new();
+
+    // ADR Dashboard-only ("Submit ADR Reports"-only view) — computed from this
+    // request's ADR reports only.
+    public List<DashboardNamedCountDto> AdrSeverityBreakdown { get; set; } = new();
+    public List<DashboardNamedCountDto> WhoUmcCausalityBreakdown { get; set; } = new();
+    public List<DashboardNamedCountDto> SeriousnessCriteriaBreakdown { get; set; } = new();
+    public List<DashboardNamedCountDto> ReportingSourceBreakdown { get; set; } = new();
+    // An ADR report with at least one linked Seriousness Criterion (ICH definition).
+    public int SeriousAdrCount { get; set; }
     // Alert Rule condition-field usage — how many configured (non-deleted) rules
     // use each supported field at least once. Rule configuration data, not scoped
     // to this request's date/unit/report filters (see AlertRuleFieldUsageDto).

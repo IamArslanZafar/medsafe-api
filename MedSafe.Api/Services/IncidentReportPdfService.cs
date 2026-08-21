@@ -233,7 +233,8 @@ public class IncidentReportPdfService : IIncidentReportPdfService
                             rep.Name,
                             rep.ProfessionId.HasValue ? lookups.Professions.GetValueOrDefault(rep.ProfessionId.Value, "—") : "—",
                             rep.ReportedDate.ToString("dd MMM yyyy"),
-                        }));
+                        }),
+                        navyHead: true);
                 }
 
                 if (r.Witnesses.Count > 0)
@@ -335,7 +336,8 @@ public class IncidentReportPdfService : IIncidentReportPdfService
                         {
                             m.CareSettingCode == "INPATIENT" ? "Inpatient" : "Outpatient",
                             m.MedicationText,
-                        }));
+                        }),
+                        navyHead: true);
                 }));
             }
 
@@ -479,13 +481,18 @@ public class IncidentReportPdfService : IIncidentReportPdfService
     private static IContainer HeaderCell(IContainer container) =>
         container.Background(RowTint).Border(0.6f).BorderColor(Border).Padding(6);
 
+    private static IContainer HeaderCellNavy(IContainer container) =>
+        container.Background(Navy).Border(0.6f).BorderColor(Border).Padding(6);
+
     private static IContainer BodyCell(IContainer container) =>
         container.Border(0.6f).BorderColor(Border).Padding(6);
 
     // Generic bordered/header table for the smaller child-record lists (Concomitant
     // Medications, Other Healthcare Professionals) — same visual style as
-    // MedicationTable but without a fixed column shape.
-    private static void SimpleTable(ColumnDescriptor col, string[] headers, IEnumerable<string[]> rows)
+    // MedicationTable but without a fixed column shape. `navyHead` swaps the pale
+    // header tint for the same navy as the section bands — Concomitant Medications
+    // / Reported By, matching the report detail view and the downloadable PDF.
+    private static void SimpleTable(ColumnDescriptor col, string[] headers, IEnumerable<string[]> rows, bool navyHead = false)
     {
         col.Item().PaddingTop(4).Table(table =>
         {
@@ -497,7 +504,7 @@ public class IncidentReportPdfService : IIncidentReportPdfService
             table.Header(header =>
             {
                 foreach (var h in headers)
-                    header.Cell().Element(HeaderCell).Text(h).FontSize(8.5f).Bold().FontColor(Navy);
+                    header.Cell().Element(navyHead ? HeaderCellNavy : HeaderCell).Text(h).FontSize(8.5f).Bold().FontColor(navyHead ? "#ffffff" : Navy);
             });
 
             foreach (var row in rows)

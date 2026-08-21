@@ -175,7 +175,13 @@ public class IncidentReportService : IIncidentReportService
                     x.HarmLevelCode == "H" || x.HarmLevelCode == "I"),
                 ClosedCases = g.Count(x => x.ReportStatus == "Closed"),
                 MedicationErrors = g.Count(x => x.ReportType == "Medication Error"),
-                AdrReactions = g.Count(x => x.ReportType == "ADR")
+                AdrReactions = g.Count(x => x.ReportType == "ADR"),
+                PendingReview = g.Count(x => x.ReportStatus == "Pending"),
+                UnderReview = g.Count(x => x.ReportStatus == "UnderReview"),
+                OverdueCount = g.Count(x =>
+                    (x.ReportStatus == "Pending" || x.ReportStatus == "UnderReview")
+                    && x.SubmittedAt < DateTime.UtcNow.AddHours(-48)),
+                UnassignedCount = g.Count(x => x.ReportStatus == "UnderReview" && (x.Review == null || x.Review.ActionOwnerUserId == null)),
             })
             .FirstOrDefaultAsync(cancellationToken);
 

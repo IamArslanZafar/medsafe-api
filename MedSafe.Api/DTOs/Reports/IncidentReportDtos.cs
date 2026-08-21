@@ -311,6 +311,15 @@ public sealed class IncidentReportSummaryDto
     public int ClosedCases { get; set; }
     public int MedicationErrors { get; set; }
     public int AdrReactions { get; set; }
+    // AwaitingReview split into its two statuses individually.
+    public int PendingReview { get; set; }
+    public int UnderReview { get; set; }
+    // Pending/UnderReview reports still unreviewed 48h+ after submission — same
+    // threshold as the Dashboard's Overdue >48h KPI.
+    public int OverdueCount { get; set; }
+    // UnderReview reports with no Action Owner set yet (IncidentReportReview.ActionOwnerUserId
+    // is null) — review has started but nobody owns the follow-up actions.
+    public int UnassignedCount { get; set; }
 }
 
 // Same optional filter set as DashboardSummaryRequest, reused here so the Reports

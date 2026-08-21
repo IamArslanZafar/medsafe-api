@@ -78,14 +78,30 @@ public class AlertDashboardService : IAlertDashboardService
             .Distinct()
             .CountAsync(cancellationToken);
 
-        var trendRaw = await triggersInRange
-            .GroupBy(x => x.TriggeredAt.Date)
-            .Select(g => new { Date = g.Key, Count = g.Count() })
-            .ToListAsync(cancellationToken);
-        var trendMap = trendRaw.ToDictionary(x => x.Date, x => x.Count);
+        // Single-day ranges (Today/Yesterday) bucket by hour instead of by day —
+        // a day-level chart with exactly one bar isn't useful — same treatment as
+        // DashboardService's Incident Trend for the same case.
         var alertsOverTime = new List<AlertTrendPointDto>();
-        for (var d = fromDate; d <= toDate; d = d.AddDays(1))
-            alertsOverTime.Add(new AlertTrendPointDto { Date = d, Count = trendMap.TryGetValue(d, out var c) ? c : 0 });
+        if (fromDate == toDate)
+        {
+            var hourlyRaw = await triggersInRange
+                .GroupBy(x => x.TriggeredAt.Hour)
+                .Select(g => new { Hour = g.Key, Count = g.Count() })
+                .ToListAsync(cancellationToken);
+            var hourlyMap = hourlyRaw.ToDictionary(x => x.Hour, x => x.Count);
+            for (var h = 0; h < 24; h++)
+                alertsOverTime.Add(new AlertTrendPointDto { Date = fromDate.AddHours(h), Count = hourlyMap.TryGetValue(h, out var c) ? c : 0 });
+        }
+        else
+        {
+            var trendRaw = await triggersInRange
+                .GroupBy(x => x.TriggeredAt.Date)
+                .Select(g => new { Date = g.Key, Count = g.Count() })
+                .ToListAsync(cancellationToken);
+            var trendMap = trendRaw.ToDictionary(x => x.Date, x => x.Count);
+            for (var d = fromDate; d <= toDate; d = d.AddDays(1))
+                alertsOverTime.Add(new AlertTrendPointDto { Date = d, Count = trendMap.TryGetValue(d, out var c) ? c : 0 });
+        }
 
         var alertsByStatus = await triggersInRange
             .GroupBy(x => x.Status)
