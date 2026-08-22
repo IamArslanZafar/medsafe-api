@@ -33,8 +33,15 @@ public class IncidentReportPdfService : IIncidentReportPdfService
 
     public async Task<byte[]> GenerateAsync(int incidentReportId, CancellationToken cancellationToken)
     {
+        // AsSplitQuery — combining this many sibling one-to-many Includes in a single
+        // query multiplies into a cartesian product (rows = product of every collection's
+        // size), which on the live DB's shared-hosting plan blew past its query-cost
+        // governor and got the query cancelled outright, silently failing every alert
+        // email whose report had enough related rows. Splitting into one query per
+        // collection keeps each query's cost independent of how many rows the others have.
         var report = await _db.IncidentReports
             .AsNoTracking()
+            .AsSplitQuery()
             .Include(r => r.Medications)
             .Include(r => r.ContributingFactors)
             .Include(r => r.SeriousnessCriteria)

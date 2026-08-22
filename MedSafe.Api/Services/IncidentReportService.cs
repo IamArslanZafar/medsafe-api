@@ -95,7 +95,11 @@ public class IncidentReportService : IIncidentReportService
 
     public async Task<IncidentReportDto?> GetByIdAsync(int id, CancellationToken cancellationToken)
     {
+        // AsSplitQuery — see IncidentReportPdfService.GenerateAsync for why: this many
+        // sibling collection Includes in one query cartesian-products into a query cost
+        // that can exceed the live DB's shared-hosting query governor.
         var report = await _db.IncidentReports
+            .AsSplitQuery()
             .Include(r => r.Medications)
             .Include(r => r.ContributingFactors)
             .Include(r => r.SeriousnessCriteria)
@@ -138,7 +142,12 @@ public class IncidentReportService : IIncidentReportService
     {
         var query = ApplyFilters(_db.IncidentReports.AsQueryable(), request);
 
+        // AsSplitQuery — see IncidentReportPdfService.GenerateAsync for why: this many
+        // sibling collection Includes cartesian-products per report, and here it's applied
+        // across the whole matching list at once, making this the most expensive query
+        // in the app under the live DB's shared-hosting query governor.
         var reports = await query
+            .AsSplitQuery()
             .Include(r => r.Medications)
             .Include(r => r.ContributingFactors)
             .Include(r => r.SeriousnessCriteria)
