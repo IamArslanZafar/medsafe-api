@@ -52,6 +52,8 @@ public sealed class ClinicalPharmacyInterventionDto
     public string? AdditionalNotes { get; set; }
     public string DraftStatus { get; set; } = "Draft";
     public string AttachmentIdsJson { get; set; } = "[]";
+    public int? SubmittedByUserId { get; set; }
+    public string? SubmittedByRole { get; set; }
     public DateTime CreatedAt { get; set; }
 }
 

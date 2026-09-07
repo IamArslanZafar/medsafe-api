@@ -24,5 +24,6 @@ public class QualityProject
     public string? Achievements { get; set; }
     public string? ProgressNotes { get; set; }
     public int? CreatedByUserId { get; set; }
+    public string? CreatedByRole { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }

@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using MedSafe.Infrastructure.Data;
 using MedSafe.Models;
 using MedSafeAPI.DTOs;
+using MedSafeAPI.Services;
 
 namespace MedSafeAPI.Controllers;
 
@@ -15,10 +16,12 @@ namespace MedSafeAPI.Controllers;
 public class QualityProjectsController : ControllerBase
 {
     private readonly AppDbContext _db;
+    private readonly ICurrentUserService _currentUser;
 
-    public QualityProjectsController(AppDbContext db)
+    public QualityProjectsController(AppDbContext db, ICurrentUserService currentUser)
     {
         _db = db;
+        _currentUser = currentUser;
     }
 
     [HttpPost]
@@ -39,6 +42,8 @@ public class QualityProjectsController : ControllerBase
             Barriers = dto.Barriers,
             Stakeholders = dto.Stakeholders,
             Status = dto.Status,
+            CreatedByUserId = _currentUser.UserId,
+            CreatedByRole = _currentUser.Role,
         };
 
         _db.QualityProjects.Add(project);
@@ -163,6 +168,8 @@ public class QualityProjectsController : ControllerBase
             Status = project.Status,
             Achievements = project.Achievements,
             ProgressNotes = project.ProgressNotes,
+            CreatedByUserId = project.CreatedByUserId,
+            CreatedByRole = project.CreatedByRole,
             CreatedAt = project.CreatedAt,
             Cycles = cycles.Select(MapCycleToDto).ToList(),
         };

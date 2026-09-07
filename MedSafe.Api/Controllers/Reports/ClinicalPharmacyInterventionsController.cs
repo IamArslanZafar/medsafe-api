@@ -16,11 +16,13 @@ public class ClinicalPharmacyInterventionsController : ControllerBase
 {
     private readonly AppDbContext _db;
     private readonly IClinicalPharmacyInterventionAttachmentService _attachments;
+    private readonly ICurrentUserService _currentUser;
 
-    public ClinicalPharmacyInterventionsController(AppDbContext db, IClinicalPharmacyInterventionAttachmentService attachments)
+    public ClinicalPharmacyInterventionsController(AppDbContext db, IClinicalPharmacyInterventionAttachmentService attachments, ICurrentUserService currentUser)
     {
         _db = db;
         _attachments = attachments;
+        _currentUser = currentUser;
     }
 
     // Uploaded standalone from the form's "+ Add Attachment" picker, before
@@ -91,6 +93,8 @@ public class ClinicalPharmacyInterventionsController : ControllerBase
             AdditionalNotes = dto.AdditionalNotes,
             DraftStatus = dto.DraftStatus,
             AttachmentIdsJson = dto.AttachmentIdsJson,
+            SubmittedByUserId = _currentUser.UserId,
+            SubmittedByRole = _currentUser.Role,
         };
 
         _db.ClinicalPharmacyInterventions.Add(intervention);
@@ -156,6 +160,8 @@ public class ClinicalPharmacyInterventionsController : ControllerBase
         AdditionalNotes = i.AdditionalNotes,
         DraftStatus = i.DraftStatus,
         AttachmentIdsJson = i.AttachmentIdsJson,
+        SubmittedByUserId = i.SubmittedByUserId,
+        SubmittedByRole = i.SubmittedByRole,
         CreatedAt = i.CreatedAt,
     };
 }

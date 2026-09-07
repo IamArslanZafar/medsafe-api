@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using MedSafe.Infrastructure.Data;
 using MedSafe.Models;
 using MedSafeAPI.DTOs;
+using MedSafeAPI.Services;
 
 namespace MedSafeAPI.Controllers;
 
@@ -16,10 +17,12 @@ namespace MedSafeAPI.Controllers;
 public class StudentFeedbackController : ControllerBase
 {
     private readonly AppDbContext _db;
+    private readonly ICurrentUserService _currentUser;
 
-    public StudentFeedbackController(AppDbContext db)
+    public StudentFeedbackController(AppDbContext db, ICurrentUserService currentUser)
     {
         _db = db;
+        _currentUser = currentUser;
     }
 
     // Any logged-in user can submit — matches FeedbackController.Submit (no role restriction).
@@ -37,6 +40,8 @@ public class StudentFeedbackController : ControllerBase
             MaterialsComments = dto.MaterialsComments,
             EnvironmentRating = dto.EnvironmentRating,
             SupportServicesJson = dto.SupportServicesJson,
+            SubmittedByUserId = _currentUser.UserId,
+            SubmittedByRole = _currentUser.Role,
         };
 
         _db.StudentFeedbacks.Add(entry);
@@ -65,6 +70,8 @@ public class StudentFeedbackController : ControllerBase
         MaterialsComments = f.MaterialsComments,
         EnvironmentRating = f.EnvironmentRating,
         SupportServicesJson = f.SupportServicesJson,
+        SubmittedByUserId = f.SubmittedByUserId,
+        SubmittedByRole = f.SubmittedByRole,
         CreatedAt = f.CreatedAt,
     };
 }

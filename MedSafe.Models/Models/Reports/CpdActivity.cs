@@ -28,5 +28,9 @@ public class CpdActivity
     public string Status { get; set; } = "pending";
     public string? ReviewFeedback { get; set; }
     public int? SubmittedByUserId { get; set; }
+    // Stored at creation (matches IncidentReport's SubmittedByRole convention)
+    // rather than resolved via a join — lets the "Submitted By" column show a
+    // role even for a submitter whose account has since been deleted/renamed.
+    public string? SubmittedByRole { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }

@@ -21,6 +21,8 @@ public sealed class CpdActivityDto
     public int? AttachmentId { get; set; }
     public string Status { get; set; } = string.Empty;
     public string? ReviewFeedback { get; set; }
+    public int? SubmittedByUserId { get; set; }
+    public string? SubmittedByRole { get; set; }
     public DateTime CreatedAt { get; set; }
 }
 

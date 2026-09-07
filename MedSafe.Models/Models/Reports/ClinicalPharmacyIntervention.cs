@@ -71,5 +71,6 @@ public class ClinicalPharmacyIntervention
     // JSON array of attachment ids — the form supports multiple files.
     public string AttachmentIdsJson { get; set; } = "[]";
     public int? SubmittedByUserId { get; set; }
+    public string? SubmittedByRole { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }

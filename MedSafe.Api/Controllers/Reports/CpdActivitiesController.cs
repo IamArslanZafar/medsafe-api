@@ -16,11 +16,13 @@ public class CpdActivitiesController : ControllerBase
 {
     private readonly AppDbContext _db;
     private readonly ICpdActivityAttachmentService _attachments;
+    private readonly ICurrentUserService _currentUser;
 
-    public CpdActivitiesController(AppDbContext db, ICpdActivityAttachmentService attachments)
+    public CpdActivitiesController(AppDbContext db, ICpdActivityAttachmentService attachments, ICurrentUserService currentUser)
     {
         _db = db;
         _attachments = attachments;
+        _currentUser = currentUser;
     }
 
     // Uploaded standalone from the form's file picker, before the activity
@@ -65,6 +67,8 @@ public class CpdActivitiesController : ControllerBase
             Comments = dto.Comments,
             AttachmentId = dto.AttachmentId,
             Status = dto.SaveAsDraft ? "draft" : "pending",
+            SubmittedByUserId = _currentUser.UserId,
+            SubmittedByRole = _currentUser.Role,
         };
 
         _db.CpdActivities.Add(activity);
@@ -100,6 +104,8 @@ public class CpdActivitiesController : ControllerBase
         AttachmentId = a.AttachmentId,
         Status = a.Status,
         ReviewFeedback = a.ReviewFeedback,
+        SubmittedByUserId = a.SubmittedByUserId,
+        SubmittedByRole = a.SubmittedByRole,
         CreatedAt = a.CreatedAt,
     };
 }

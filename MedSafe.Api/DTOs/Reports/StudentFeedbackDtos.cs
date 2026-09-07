@@ -14,6 +14,8 @@ public sealed class StudentFeedbackDto
     public string? MaterialsComments { get; set; }
     public int EnvironmentRating { get; set; }
     public string SupportServicesJson { get; set; } = "{}";
+    public int? SubmittedByUserId { get; set; }
+    public string? SubmittedByRole { get; set; }
     public DateTime CreatedAt { get; set; }
 }
 
