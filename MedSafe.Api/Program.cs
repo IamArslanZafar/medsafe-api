@@ -39,6 +39,8 @@ builder.Services.AddScoped<IFileService, FileService>();
 builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
 builder.Services.AddScoped<IIncidentReportService, IncidentReportService>();
 builder.Services.AddScoped<IIncidentAttachmentService, IncidentAttachmentService>();
+builder.Services.AddScoped<ICpdActivityAttachmentService, CpdActivityAttachmentService>();
+builder.Services.AddScoped<IClinicalPharmacyInterventionAttachmentService, ClinicalPharmacyInterventionAttachmentService>();
 builder.Services.AddScoped<IIncidentReportReviewService, IncidentReportReviewService>();
 builder.Services.AddScoped<IDashboardService, DashboardService>();
 builder.Services.AddScoped<IAlertRuleService, AlertRuleService>();

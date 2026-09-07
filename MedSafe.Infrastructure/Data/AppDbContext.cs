@@ -22,6 +22,15 @@ public class AppDbContext : DbContext
     public DbSet<AlertTriggerHistory> AlertTriggerHistories => Set<AlertTriggerHistory>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
     public DbSet<Feedback> Feedbacks => Set<Feedback>();
+    public DbSet<StudentFeedback> StudentFeedbacks => Set<StudentFeedback>();
+    public DbSet<CpdActivity> CpdActivities => Set<CpdActivity>();
+    public DbSet<CpdActivityAttachment> CpdActivityAttachments => Set<CpdActivityAttachment>();
+    public DbSet<ClinicalPharmacyIntervention> ClinicalPharmacyInterventions => Set<ClinicalPharmacyIntervention>();
+    public DbSet<ClinicalPharmacyInterventionAttachment> ClinicalPharmacyInterventionAttachments => Set<ClinicalPharmacyInterventionAttachment>();
+    public DbSet<QualityProject> QualityProjects => Set<QualityProject>();
+    public DbSet<QualityProjectCycle> QualityProjectCycles => Set<QualityProjectCycle>();
+    public DbSet<ResearchPublication> ResearchPublications => Set<ResearchPublication>();
+    public DbSet<ResearcherProfile> ResearcherProfiles => Set<ResearcherProfile>();
     public DbSet<DropdownDefinition> DropdownDefinitions => Set<DropdownDefinition>();
     public DbSet<DropdownValue> DropdownValues => Set<DropdownValue>();
     public DbSet<ContributingFactor> ContributingFactors => Set<ContributingFactor>();
@@ -75,6 +84,13 @@ public class AppDbContext : DbContext
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        // MedSafe.Models has no EF Core reference, so precision can't be set
+        // via a [Precision] attribute on the entities themselves — configured
+        // here instead of leaving SQL Server's silently-truncating default.
+        modelBuilder.Entity<CpdActivity>().Property(a => a.Hours).HasPrecision(6, 2);
+        modelBuilder.Entity<CpdActivity>().Property(a => a.Credits).HasPrecision(6, 2);
+        modelBuilder.Entity<ClinicalPharmacyIntervention>().Property(i => i.EstimatedSaving).HasPrecision(10, 2);
+
         modelBuilder.Entity<User>()
             .HasIndex(u => u.Email).IsUnique();
 
