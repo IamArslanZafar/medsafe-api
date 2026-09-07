@@ -967,7 +967,12 @@ public class AppDbContext : DbContext
             new SystemModule { Id = 8, Name = "Dashboard", Description = "Viewing analytics dashboard", DisplayOrder = 8 },
             new SystemModule { Id = 9, Name = "Training & Support", Description = "Viewing training/reference and support resources", DisplayOrder = 9 },
             new SystemModule { Id = 10, Name = "Notifications", Description = "Viewing the in-app notification bell", DisplayOrder = 10 },
-            new SystemModule { Id = 11, Name = "System Settings", Description = "Managing system-level settings such as outgoing email delivery", DisplayOrder = 11 }
+            new SystemModule { Id = 11, Name = "System Settings", Description = "Managing system-level settings such as outgoing email delivery", DisplayOrder = 11 },
+            new SystemModule { Id = 12, Name = "Clinical Pharmacy Intervention", Description = "Documenting and reviewing pharmacist clinical interventions", DisplayOrder = 12 },
+            new SystemModule { Id = 13, Name = "CPD & Education", Description = "Logging and reviewing continuing professional development activities", DisplayOrder = 13 },
+            new SystemModule { Id = 14, Name = "Quality Project Tracker", Description = "Managing quality improvement project charters and PDSA cycles", DisplayOrder = 14 },
+            new SystemModule { Id = 15, Name = "Research & Publications", Description = "Managing research publication records", DisplayOrder = 15 },
+            new SystemModule { Id = 16, Name = "Student Feedback", Description = "Submitting and reviewing student clinical placement feedback", DisplayOrder = 16 }
         );
 
         modelBuilder.Entity<Permission>().HasData(
@@ -1010,7 +1015,26 @@ public class AppDbContext : DbContext
 
             new Permission { Id = 28, Name = "View Reports Hub", PermissionTag = "incident_reports.view_hub", ParentId = null, SystemModuleId = 1 },
 
-            new Permission { Id = 29, Name = "Manage Email Settings", PermissionTag = "system_settings.manage_email", ParentId = null, SystemModuleId = 11 }
+            new Permission { Id = 29, Name = "Manage Email Settings", PermissionTag = "system_settings.manage_email", ParentId = null, SystemModuleId = 11 },
+
+            new Permission { Id = 30, Name = "Clinical Pharmacy Intervention", PermissionTag = "clinical_pharmacy_intervention", ParentId = null, SystemModuleId = 12 },
+            new Permission { Id = 31, Name = "Submit Intervention", PermissionTag = "clinical_pharmacy_intervention.submit", ParentId = 30, SystemModuleId = 12 },
+            new Permission { Id = 32, Name = "View Intervention Dashboard", PermissionTag = "clinical_pharmacy_intervention.view_dashboard", ParentId = 30, SystemModuleId = 12 },
+
+            new Permission { Id = 33, Name = "CPD & Education", PermissionTag = "cpd", ParentId = null, SystemModuleId = 13 },
+            new Permission { Id = 34, Name = "Submit CPD Activity", PermissionTag = "cpd.submit", ParentId = 33, SystemModuleId = 13 },
+            new Permission { Id = 35, Name = "View CPD Dashboard", PermissionTag = "cpd.view_dashboard", ParentId = 33, SystemModuleId = 13 },
+
+            new Permission { Id = 36, Name = "Quality Project Tracker", PermissionTag = "quality_projects", ParentId = null, SystemModuleId = 14 },
+            new Permission { Id = 37, Name = "Manage Quality Projects", PermissionTag = "quality_projects.manage", ParentId = 36, SystemModuleId = 14 },
+            new Permission { Id = 38, Name = "View Quality Project Dashboard", PermissionTag = "quality_projects.view_dashboard", ParentId = 36, SystemModuleId = 14 },
+
+            new Permission { Id = 39, Name = "Research & Publications", PermissionTag = "research_publications", ParentId = null, SystemModuleId = 15 },
+            new Permission { Id = 40, Name = "Manage Research Publications", PermissionTag = "research_publications.manage", ParentId = 39, SystemModuleId = 15 },
+
+            new Permission { Id = 41, Name = "Student Feedback", PermissionTag = "student_feedback", ParentId = null, SystemModuleId = 16 },
+            new Permission { Id = 42, Name = "Submit Student Feedback", PermissionTag = "student_feedback.submit", ParentId = 41, SystemModuleId = 16 },
+            new Permission { Id = 43, Name = "Review Student Feedback", PermissionTag = "student_feedback.review", ParentId = 41, SystemModuleId = 16 }
         );
 
         // Admin = every permission. Physician = clinical review + report basics.
@@ -1032,10 +1056,23 @@ public class AppDbContext : DbContext
         // can't hang off that. Granted wherever 1 already is, matching current access.
         // Manage Email Settings (29) holds SMTP credentials — Admin only by default,
         // same as Alert Triggers Dashboard (26) was before.
-        var adminAll = Enumerable.Range(1, 29).Select(pid => new RolePermission { RoleId = 3, PermissionId = pid });
-        var physician = new[] { 1, 3, 5, 6, 7, 20, 21, 22, 23, 27, 28 }.Select(pid => new RolePermission { RoleId = 2, PermissionId = pid });
-        var nurse = new[] { 1, 2, 15, 16, 20, 21, 22, 23, 24, 25, 27, 28 }.Select(pid => new RolePermission { RoleId = 1, PermissionId = pid });
-        var pharmacist = new[] { 1, 2, 20, 21, 22, 23, 24, 25, 27, 28 }.Select(pid => new RolePermission { RoleId = 4, PermissionId = pid });
+        // Permissions 30-43 back the 5 report modules built this session (Clinical
+        // Pharmacy Intervention, CPD & Education, Quality Project Tracker, Research &
+        // Publications, Student Feedback). Their default grants mirror whichever
+        // existing coarse alias currently gates each module's route in the frontend
+        // (see src/data/permissions.js ROUTE_ACCESS) so nobody's real access changes
+        // the moment these show up in the Roles & Permissions screen: submit_reports's
+        // current grantees (Nurse/Admin/Pharmacist) get Submit Intervention (31) and
+        // Submit CPD Activity (34); clinical_review's grantees (Physician/Admin) get
+        // View Intervention Dashboard (32); view_dashboard's grantees (everyone) get
+        // View CPD Dashboard (35); manage_configurations's grantees (Admin only) get
+        // Quality Project Tracker (36-38) and Research & Publications (39-40); and
+        // view_feedback/review_feedback's grantees (Nurse+Admin / Admin) get Submit
+        // Student Feedback (42) / Review Student Feedback (43) respectively.
+        var adminAll = Enumerable.Range(1, 43).Select(pid => new RolePermission { RoleId = 3, PermissionId = pid });
+        var physician = new[] { 1, 3, 5, 6, 7, 20, 21, 22, 23, 27, 28, 30, 32, 33, 35 }.Select(pid => new RolePermission { RoleId = 2, PermissionId = pid });
+        var nurse = new[] { 1, 2, 15, 16, 20, 21, 22, 23, 24, 25, 27, 28, 30, 31, 33, 34, 35, 41, 42 }.Select(pid => new RolePermission { RoleId = 1, PermissionId = pid });
+        var pharmacist = new[] { 1, 2, 20, 21, 22, 23, 24, 25, 27, 28, 30, 31, 33, 34, 35 }.Select(pid => new RolePermission { RoleId = 4, PermissionId = pid });
 
         modelBuilder.Entity<RolePermission>().HasData(
             adminAll.Concat(physician).Concat(nurse).Concat(pharmacist).ToArray()
