@@ -32,4 +32,17 @@ public class DashboardController : ControllerBase
         var summary = await _dashboardService.GetSummaryAsync(request, cancellationToken);
         return Ok(summary);
     }
+
+    // POST /api/dashboard/modules-overview { startDate, endDate } — the Overall
+    // dashboard's CPI/CPD/QPT trend lines, status breakdown, and KPI counts, all
+    // computed by one stored procedure. Admin-only, matching each of those 3
+    // modules' own GET-all list endpoints (the Overall dashboard is only reachable
+    // by a role with every submit permission, i.e. Admin, today).
+    [HttpPost("modules-overview")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> GetModulesOverviewSummary([FromBody] ModulesOverviewSummaryRequest request, CancellationToken cancellationToken)
+    {
+        var summary = await _dashboardService.GetModulesOverviewSummaryAsync(request, cancellationToken);
+        return Ok(summary);
+    }
 }

@@ -309,4 +309,73 @@ public class DashboardService : IDashboardService
             AlertsTriggeredLast24Hours = alertRuleSummary.AlertsTriggeredLast24Hours,
         };
     }
+
+    // The Main Dashboard's Overall view used to fetch the full Clinical Pharmacy
+    // Intervention / CPD Activity / Quality Project lists and re-aggregate them
+    // client-side in JavaScript for its Incident Trend lines, Review Status
+    // breakdown, and KPI counts. dbo.sp_GetModulesOverviewSummary does all of
+    // that aggregation server-side in one round trip instead — this method is
+    // a thin pass-through that executes it and reads its 5 result sets.
+    public async Task<ModulesOverviewSummaryDto> GetModulesOverviewSummaryAsync(ModulesOverviewSummaryRequest request, CancellationToken cancellationToken)
+    {
+        var result = new ModulesOverviewSummaryDto();
+
+        var connection = _db.Database.GetDbConnection();
+        var wasClosed = connection.State != System.Data.ConnectionState.Open;
+        if (wasClosed) await connection.OpenAsync(cancellationToken);
+        try
+        {
+            await using var command = connection.CreateCommand();
+            command.CommandText = "dbo.sp_GetModulesOverviewSummary";
+            command.CommandType = System.Data.CommandType.StoredProcedure;
+
+            var startParam = command.CreateParameter();
+            startParam.ParameterName = "@StartDate";
+            startParam.Value = request.StartDate.Date;
+            command.Parameters.Add(startParam);
+
+            var endParam = command.CreateParameter();
+            endParam.ParameterName = "@EndDate";
+            endParam.Value = request.EndDate.Date;
+            command.Parameters.Add(endParam);
+
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+
+            // Result set 1: totals.
+            if (await reader.ReadAsync(cancellationToken))
+            {
+                result.CpiCount = reader.GetInt32(reader.GetOrdinal("CpiCount"));
+                result.CpdCount = reader.GetInt32(reader.GetOrdinal("CpdCount"));
+                result.QptCount = reader.GetInt32(reader.GetOrdinal("QptCount"));
+            }
+
+            // Result set 2: one row per trend bucket, already in chronological order.
+            await reader.NextResultAsync(cancellationToken);
+            while (await reader.ReadAsync(cancellationToken))
+            {
+                result.CpiTrend.Add(reader.GetInt32(reader.GetOrdinal("CpiCount")));
+                result.CpdTrend.Add(reader.GetInt32(reader.GetOrdinal("CpdCount")));
+                result.QptTrend.Add(reader.GetInt32(reader.GetOrdinal("QptCount")));
+            }
+
+            // Result sets 3-5: CPI / CPD / QPT status breakdowns.
+            await reader.NextResultAsync(cancellationToken);
+            while (await reader.ReadAsync(cancellationToken))
+                result.CpiStatusBreakdown.Add(new DashboardNamedCountDto { Name = reader.GetString(0), Count = reader.GetInt32(1) });
+
+            await reader.NextResultAsync(cancellationToken);
+            while (await reader.ReadAsync(cancellationToken))
+                result.CpdStatusBreakdown.Add(new DashboardNamedCountDto { Name = reader.GetString(0), Count = reader.GetInt32(1) });
+
+            await reader.NextResultAsync(cancellationToken);
+            while (await reader.ReadAsync(cancellationToken))
+                result.QptStatusBreakdown.Add(new DashboardNamedCountDto { Name = reader.GetString(0), Count = reader.GetInt32(1) });
+        }
+        finally
+        {
+            if (wasClosed) await connection.CloseAsync();
+        }
+
+        return result;
+    }
 }

@@ -106,3 +106,30 @@ public sealed class DashboardNamedCountDto
     public string Name { get; set; } = string.Empty;
     public int Count { get; set; }
 }
+
+// Powers the Main Dashboard's Overall view — the Incident Trend chart's 3 extra
+// lines, the Review Status card's 3 extra breakdowns, and the CPI/CPD/QPT KPI
+// counts. A single stored procedure (dbo.sp_GetModulesOverviewSummary) computes
+// all of it in one round trip, replacing what used to be 3 separate list
+// fetches (Clinical Pharmacy Interventions, CPD Activities, Quality Projects)
+// re-aggregated client-side in the frontend.
+public sealed class ModulesOverviewSummaryRequest
+{
+    public DateTime StartDate { get; set; }
+    public DateTime EndDate { get; set; }
+}
+
+public sealed class ModulesOverviewSummaryDto
+{
+    public int CpiCount { get; set; }
+    public int CpdCount { get; set; }
+    public int QptCount { get; set; }
+    // Same bucket count/order as DashboardTrendDto.Labels for the same date
+    // range (hourly for a single day, daily otherwise) — align by index, not by label text.
+    public List<int> CpiTrend { get; set; } = new();
+    public List<int> CpdTrend { get; set; } = new();
+    public List<int> QptTrend { get; set; } = new();
+    public List<DashboardNamedCountDto> CpiStatusBreakdown { get; set; } = new();
+    public List<DashboardNamedCountDto> CpdStatusBreakdown { get; set; } = new();
+    public List<DashboardNamedCountDto> QptStatusBreakdown { get; set; } = new();
+}
