@@ -50,6 +50,7 @@ builder.Services.AddScoped<IAlertDashboardService, AlertDashboardService>();
 builder.Services.AddScoped<INotificationService, NotificationService>();
 builder.Services.AddScoped<IEmailService, EmailService>();
 builder.Services.AddScoped<IIncidentReportPdfService, IncidentReportPdfService>();
+builder.Services.AddHttpClient(); // IHttpClientFactory — used by ResearchPublicationsController for the ORCID token exchange
 builder.Services.AddHostedService<AlertMonitorService>();
 builder.Services.AddHostedService<EmailNotificationWorker>();
 
