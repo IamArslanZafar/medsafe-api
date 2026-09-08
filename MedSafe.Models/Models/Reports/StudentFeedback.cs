@@ -9,6 +9,10 @@ namespace MedSafe.Models;
 public class StudentFeedback
 {
     public int Id { get; set; }
+    // Auto-generated, human-facing reference code (e.g. "SF-2435465"),
+    // matching the IR-/MD-/ADR-/CPD- code convention used by the other
+    // report modules.
+    public string? FeedbackCode { get; set; }
     public string StudentName { get; set; } = string.Empty;
     public int OverallQuality { get; set; }
     public int InstructorClarity { get; set; }

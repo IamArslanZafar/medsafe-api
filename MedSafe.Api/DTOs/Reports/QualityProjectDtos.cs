@@ -5,6 +5,7 @@ namespace MedSafeAPI.DTOs;
 public sealed class QualityProjectDto
 {
     public int Id { get; set; }
+    public string? ProjectCode { get; set; }
     public string ProjectTitle { get; set; } = string.Empty;
     public string? OrgName { get; set; }
     public string? SponsorName { get; set; }

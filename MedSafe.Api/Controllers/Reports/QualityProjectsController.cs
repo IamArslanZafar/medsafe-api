@@ -29,6 +29,7 @@ public class QualityProjectsController : ControllerBase
     {
         var project = new QualityProject
         {
+            ProjectCode = $"QPT-{Random.Shared.Next(1000000, 9999999)}",
             ProjectTitle = dto.ProjectTitle,
             OrgName = dto.OrgName,
             SponsorName = dto.SponsorName,
@@ -153,6 +154,7 @@ public class QualityProjectsController : ControllerBase
         return new QualityProjectDto
         {
             Id = project!.Id,
+            ProjectCode = project.ProjectCode,
             ProjectTitle = project.ProjectTitle,
             OrgName = project.OrgName,
             SponsorName = project.SponsorName,

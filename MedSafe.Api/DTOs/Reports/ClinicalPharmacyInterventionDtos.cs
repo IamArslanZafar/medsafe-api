@@ -6,6 +6,7 @@ namespace MedSafeAPI.DTOs;
 public sealed class ClinicalPharmacyInterventionDto
 {
     public int Id { get; set; }
+    public string? InterventionCode { get; set; }
     public string? Mrn { get; set; }
     public string? PatientName { get; set; }
     public string? Dob { get; set; }

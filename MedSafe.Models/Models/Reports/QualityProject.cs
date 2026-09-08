@@ -8,6 +8,10 @@ namespace MedSafe.Models;
 public class QualityProject
 {
     public int Id { get; set; }
+    // Auto-generated, human-facing reference code (e.g. "QPT-2435465"),
+    // matching the IR-/MD-/ADR-/CPD- code convention used by the other
+    // report modules — shown in the dashboard table and the tracker header.
+    public string? ProjectCode { get; set; }
     public string ProjectTitle { get; set; } = string.Empty;
     public string? OrgName { get; set; }
     public string? SponsorName { get; set; }

@@ -47,6 +47,7 @@ public class ClinicalPharmacyInterventionsController : ControllerBase
     {
         var intervention = new ClinicalPharmacyIntervention
         {
+            InterventionCode = $"CPI-{Random.Shared.Next(1000000, 9999999)}",
             Mrn = dto.Mrn,
             PatientName = dto.PatientName,
             Dob = dto.Dob,
@@ -114,6 +115,7 @@ public class ClinicalPharmacyInterventionsController : ControllerBase
     private static ClinicalPharmacyInterventionDto MapToDto(ClinicalPharmacyIntervention i) => new()
     {
         Id = i.Id,
+        InterventionCode = i.InterventionCode,
         Mrn = i.Mrn,
         PatientName = i.PatientName,
         Dob = i.Dob,

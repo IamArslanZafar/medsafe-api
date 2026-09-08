@@ -5,6 +5,7 @@ namespace MedSafeAPI.DTOs;
 public sealed class StudentFeedbackDto
 {
     public int Id { get; set; }
+    public string? FeedbackCode { get; set; }
     public string StudentName { get; set; } = string.Empty;
     public int OverallQuality { get; set; }
     public int InstructorClarity { get; set; }

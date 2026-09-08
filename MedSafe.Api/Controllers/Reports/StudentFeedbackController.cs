@@ -31,6 +31,7 @@ public class StudentFeedbackController : ControllerBase
     {
         var entry = new StudentFeedback
         {
+            FeedbackCode = $"SF-{Random.Shared.Next(1000000, 9999999)}",
             StudentName = dto.StudentName,
             OverallQuality = dto.OverallQuality,
             InstructorClarity = dto.InstructorClarity,
@@ -61,6 +62,7 @@ public class StudentFeedbackController : ControllerBase
     private static StudentFeedbackDto MapToDto(StudentFeedback f) => new()
     {
         Id = f.Id,
+        FeedbackCode = f.FeedbackCode,
         StudentName = f.StudentName,
         OverallQuality = f.OverallQuality,
         InstructorClarity = f.InstructorClarity,

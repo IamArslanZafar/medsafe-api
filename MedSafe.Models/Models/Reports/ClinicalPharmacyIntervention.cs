@@ -9,6 +9,11 @@ public class ClinicalPharmacyIntervention
 {
     public int Id { get; set; }
 
+    // Auto-generated, human-facing reference code (e.g. "CPI-2435465"),
+    // matching the IR-/MD-/ADR-/CPD- code convention used by the other
+    // report modules.
+    public string? InterventionCode { get; set; }
+
     // Patient
     public string? Mrn { get; set; }
     public string? PatientName { get; set; }
