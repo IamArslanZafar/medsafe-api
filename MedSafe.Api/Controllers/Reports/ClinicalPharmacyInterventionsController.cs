@@ -104,11 +104,17 @@ public class ClinicalPharmacyInterventionsController : ControllerBase
     }
 
     // Matches the "clinical_review" permission already gating the dashboard route.
+    // Admin (or a user granted "Admin Data Access") sees every intervention;
+    // everyone else sees only what they themselves submitted — same rule as
+    // GET /incident-reports.
     [HttpGet]
-    [Authorize(Roles = "Admin")]
     public async Task<IActionResult> GetAll()
     {
-        var list = await _db.ClinicalPharmacyInterventions.OrderByDescending(i => i.CreatedAt).ToListAsync();
+        var query = _db.ClinicalPharmacyInterventions.AsQueryable();
+        if (_currentUser.Role != "Admin" && !_currentUser.HasFullDataAccess)
+            query = query.Where(i => i.SubmittedByUserId == _currentUser.UserId);
+
+        var list = await query.OrderByDescending(i => i.CreatedAt).ToListAsync();
         return Ok(list.Select(MapToDto));
     }
 

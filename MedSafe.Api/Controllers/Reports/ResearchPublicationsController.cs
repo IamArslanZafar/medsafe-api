@@ -31,12 +31,24 @@ public class ResearchPublicationsController : ControllerBase
         _config = config;
     }
 
+    // Admin (or a user granted "Admin Data Access") sees every publication; everyone
+    // else sees only what they themselves submitted — same rule as GET /incident-reports.
     [HttpGet]
     public async Task<IActionResult> GetAll()
     {
-        var list = await _db.ResearchPublications.OrderByDescending(p => p.CreatedAt).ToListAsync();
+        var query = _db.ResearchPublications.AsQueryable();
+        if (_currentUser.Role != "Admin" && !_currentUser.HasFullDataAccess)
+            query = query.Where(p => p.SubmittedByUserId == _currentUser.UserId);
+
+        var list = await query.OrderByDescending(p => p.CreatedAt).ToListAsync();
         return Ok(list.Select(MapToDto));
     }
+
+    // True for Admin, a user granted "Admin Data Access", or the publication's own
+    // submitter — guards Update/Delete below so an id can't be edited or removed by
+    // a user it doesn't belong to just by knowing/guessing its numeric id.
+    private bool CanAccessPublication(ResearchPublication publication) =>
+        _currentUser.Role == "Admin" || _currentUser.HasFullDataAccess || publication.SubmittedByUserId == _currentUser.UserId;
 
     [HttpPost]
     public async Task<IActionResult> Create(ResearchPublicationCreateDto dto)
@@ -67,6 +79,7 @@ public class ResearchPublicationsController : ControllerBase
     {
         var publication = await _db.ResearchPublications.FindAsync(id);
         if (publication == null) return NotFound();
+        if (!CanAccessPublication(publication)) return Forbid();
 
         publication.Title = dto.Title;
         publication.MetaLine = dto.MetaLine;
@@ -89,6 +102,7 @@ public class ResearchPublicationsController : ControllerBase
     {
         var publication = await _db.ResearchPublications.FindAsync(id);
         if (publication == null) return NotFound();
+        if (!CanAccessPublication(publication)) return Forbid();
 
         _db.ResearchPublications.Remove(publication);
         await _db.SaveChangesAsync();

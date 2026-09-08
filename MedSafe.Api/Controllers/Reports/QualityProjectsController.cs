@@ -53,11 +53,16 @@ public class QualityProjectsController : ControllerBase
     }
 
     // Matches the "manage_configurations" permission already gating the dashboard route.
+    // Admin (or a user granted "Admin Data Access") sees every project; everyone
+    // else sees only the ones they themselves created — same rule as GET /incident-reports.
     [HttpGet]
-    [Authorize(Roles = "Admin")]
     public async Task<IActionResult> GetAll()
     {
-        var projects = await _db.QualityProjects.OrderByDescending(p => p.CreatedAt).ToListAsync();
+        var query = _db.QualityProjects.AsQueryable();
+        if (_currentUser.Role != "Admin" && !_currentUser.HasFullDataAccess)
+            query = query.Where(p => p.CreatedByUserId == _currentUser.UserId);
+
+        var projects = await query.OrderByDescending(p => p.CreatedAt).ToListAsync();
         var result = new List<QualityProjectDto>();
         foreach (var p in projects)
         {
@@ -65,6 +70,12 @@ public class QualityProjectsController : ControllerBase
         }
         return Ok(result);
     }
+
+    // True for Admin, a user granted "Admin Data Access", or the project's own creator —
+    // guards GetById/Update/UpsertCycle below so a project id can't be viewed or edited
+    // by a user it doesn't belong to just by knowing/guessing its numeric id.
+    private bool CanAccessProject(QualityProject project) =>
+        _currentUser.Role == "Admin" || _currentUser.HasFullDataAccess || project.CreatedByUserId == _currentUser.UserId;
 
     // The tracker page is opened directly by id (/quality-project-tracker/:id),
     // not from an already-fetched list — unlike the other 4 modules, this one
@@ -74,6 +85,7 @@ public class QualityProjectsController : ControllerBase
     {
         var project = await _db.QualityProjects.FindAsync(id);
         if (project == null) return NotFound();
+        if (!CanAccessProject(project)) return Forbid();
         return Ok(await MapToDto(id, project));
     }
 
@@ -82,6 +94,7 @@ public class QualityProjectsController : ControllerBase
     {
         var project = await _db.QualityProjects.FindAsync(id);
         if (project == null) return NotFound();
+        if (!CanAccessProject(project)) return Forbid();
 
         project.ProjectTitle = dto.ProjectTitle;
         project.OrgName = dto.OrgName;
@@ -108,8 +121,9 @@ public class QualityProjectsController : ControllerBase
     [HttpPost("{id:int}/cycles")]
     public async Task<IActionResult> UpsertCycle(int id, QualityProjectCycleUpsertDto dto)
     {
-        var projectExists = await _db.QualityProjects.AnyAsync(p => p.Id == id);
-        if (!projectExists) return NotFound();
+        var project = await _db.QualityProjects.FindAsync(id);
+        if (project == null) return NotFound();
+        if (!CanAccessProject(project)) return Forbid();
 
         QualityProjectCycle cycle;
         if (dto.Id > 0)

@@ -77,11 +77,16 @@ public class CpdActivitiesController : ControllerBase
     }
 
     // Matches the "view_dashboard" permission already gating the CPD Dashboard route.
+    // Admin (or a user granted "Admin Data Access") sees every activity; everyone
+    // else sees only what they themselves submitted — same rule as GET /incident-reports.
     [HttpGet]
-    [Authorize(Roles = "Admin")]
     public async Task<IActionResult> GetAll()
     {
-        var list = await _db.CpdActivities.OrderByDescending(a => a.CreatedAt).ToListAsync();
+        var query = _db.CpdActivities.AsQueryable();
+        if (_currentUser.Role != "Admin" && !_currentUser.HasFullDataAccess)
+            query = query.Where(a => a.SubmittedByUserId == _currentUser.UserId);
+
+        var list = await query.OrderByDescending(a => a.CreatedAt).ToListAsync();
         return Ok(list.Select(MapToDto));
     }
 

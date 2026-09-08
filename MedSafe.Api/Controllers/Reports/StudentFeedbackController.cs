@@ -51,11 +51,17 @@ public class StudentFeedbackController : ControllerBase
     }
 
     // Matches the "review_feedback" permission already gating the Feedback List route.
+    // Admin (or a user granted the "Admin Data Access" toggle) sees every entry;
+    // everyone else sees only what they themselves submitted — same visibility
+    // rule as GET /incident-reports and the dashboard.
     [HttpGet]
-    [Authorize(Roles = "Admin")]
     public async Task<IActionResult> GetAll()
     {
-        var list = await _db.StudentFeedbacks.OrderByDescending(f => f.CreatedAt).ToListAsync();
+        var query = _db.StudentFeedbacks.AsQueryable();
+        if (_currentUser.Role != "Admin" && !_currentUser.HasFullDataAccess)
+            query = query.Where(f => f.SubmittedByUserId == _currentUser.UserId);
+
+        var list = await query.OrderByDescending(f => f.CreatedAt).ToListAsync();
         return Ok(list.Select(MapToDto));
     }
 
