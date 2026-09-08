@@ -53,6 +53,7 @@ public class UsersController : ControllerBase
             LastLogin = u.LastLogin,
             CreatedAt = u.CreatedAt,
             ProfileImage = u.ProfileImage,
+            HasFullDataAccess = u.HasFullDataAccess,
             Availability = availabilityByUser.GetValueOrDefault(u.Id, [])
         }));
     }
@@ -104,6 +105,32 @@ public class UsersController : ControllerBase
 
         await _repo.SaveAsync();
         return Ok(new { message = $"Role updated to {role.Name}" });
+    }
+
+    // Toggles the "Admin Data Access" flag — independent of Role, this just decides
+    // whether the target user sees every other user's data (like an Admin) or only
+    // their own on pages that scope by Role=="Admin" today. Same caveat as
+    // UpdateRole below: this only takes effect on that user's *next* login/refresh,
+    // since the flag is baked into their JWT as a claim, not re-checked from the DB
+    // on every request.
+    [HttpPut("{id}/data-access")]
+    public async Task<IActionResult> UpdateDataAccess(int id, UpdateUserDataAccessDto dto)
+    {
+        var user = await _repo.GetByIdAsync(id);
+        if (user == null) return NotFound();
+
+        user.HasFullDataAccess = dto.HasFullDataAccess;
+
+        await _repo.AddAuditLogAsync(new AuditLog
+        {
+            UserName = User.FindFirst(ClaimTypes.Name)!.Value,
+            Action = "UPDATE_USER_DATA_ACCESS",
+            Details = $"User {user.Email} full data access set to {dto.HasFullDataAccess}",
+            IpAddress = HttpContext.Connection.RemoteIpAddress?.ToString()
+        });
+
+        await _repo.SaveAsync();
+        return Ok(new { message = $"Full data access {(dto.HasFullDataAccess ? "granted" : "revoked")}" });
     }
 
     [HttpPut("{id}/profession")]

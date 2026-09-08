@@ -20,4 +20,7 @@ public class CurrentUserService : ICurrentUserService
     public string Role => _httpContextAccessor.HttpContext?.User.FindFirst(ClaimTypes.Role)?.Value ?? string.Empty;
 
     public string Name => _httpContextAccessor.HttpContext?.User.FindFirst(ClaimTypes.Name)?.Value ?? string.Empty;
+
+    public bool HasFullDataAccess =>
+        _httpContextAccessor.HttpContext?.User.FindFirst("hasFullDataAccess")?.Value == "true";
 }

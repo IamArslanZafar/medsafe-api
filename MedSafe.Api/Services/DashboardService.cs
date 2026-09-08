@@ -45,8 +45,9 @@ public class DashboardService : IDashboardService
             .Where(r => r.SubmittedAt.Date >= actualStartDate && r.SubmittedAt.Date <= actualEndDate)
             .AsQueryable();
 
-        // Only Admin sees every report; every other role is scoped to their own.
-        if (_currentUser.Role != "Admin")
+        // Only Admin (or a user granted the "Admin Data Access" toggle) sees every report;
+        // every other role is scoped to their own.
+        if (_currentUser.Role != "Admin" && !_currentUser.HasFullDataAccess)
             query = query.Where(r => r.SubmittedByUserId == _currentUser.UserId);
 
         if (!string.IsNullOrWhiteSpace(request.FacilityUnit) && request.FacilityUnit != "All Units")

@@ -24,6 +24,10 @@ public class RegisterDto
     public int? ProfessionId { get; set; }
     public int? PositionId { get; set; }
     public IFormFile? ProfileImage { get; set; }
+    // "Admin Data Access" toggle in the Add New User form — grants this user visibility
+    // into every other user's data (same effect as Role=="Admin" has on that scoping)
+    // regardless of the Role picked above. Defaults off.
+    public bool HasFullDataAccess { get; set; } = false;
     // Bound from indexed form fields: Availability[0].DayOfWeek, Availability[0].StartTime, ...
     public List<AvailabilityRequestDto> Availability { get; set; } = [];
 }

@@ -23,6 +23,12 @@ public class User
     public DateTime? LastLogin { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public string? ProfileImage { get; set; }
+    // When true, this user sees every other user's data on pages that otherwise scope
+    // non-Admin roles to their own records (e.g. Reports Hub, the dashboard) — independent
+    // of their actual Role. Lets an Admin grant "see everything" to a specific
+    // Nurse/Physician/Pharmacist without changing what Role (and therefore which
+    // [Authorize(Roles=...)] endpoints) they hold.
+    public bool HasFullDataAccess { get; set; } = false;
 
     public ICollection<RefreshToken> RefreshTokens { get; set; } = new List<RefreshToken>();
 }

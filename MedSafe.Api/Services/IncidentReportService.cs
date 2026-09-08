@@ -119,7 +119,7 @@ public class IncidentReportService : IIncidentReportService
 
     public async Task<bool> CanCurrentUserAccessAsync(int incidentReportId, CancellationToken cancellationToken)
     {
-        if (_currentUser.Role == "Admin")
+        if (_currentUser.Role == "Admin" || _currentUser.HasFullDataAccess)
             return true;
 
         var userId = _currentUser.UserId;
@@ -217,7 +217,7 @@ public class IncidentReportService : IIncidentReportService
                 break;
 
             default:
-                if (_currentUser.Role != "Admin")
+                if (_currentUser.Role != "Admin" && !_currentUser.HasFullDataAccess)
                 {
                     query = query.Where(r =>
                         r.SubmittedByUserId == userId ||

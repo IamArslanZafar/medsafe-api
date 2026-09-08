@@ -362,7 +362,8 @@ public class AuthController : ControllerBase
             Shift = dto.Shift,
             ProfessionId = dto.ProfessionId,
             PositionId = dto.PositionId,
-            ProfileImage = profileImagePath
+            ProfileImage = profileImagePath,
+            HasFullDataAccess = dto.HasFullDataAccess
         };
 
         await _repo.AddAsync(user);

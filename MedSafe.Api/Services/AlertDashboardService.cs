@@ -46,7 +46,7 @@ public class AlertDashboardService : IAlertDashboardService
     // submitted, review, or were personally notified about — not other users'.
     private IQueryable<AlertTriggerHistory> ApplyUserScope(IQueryable<AlertTriggerHistory> query)
     {
-        if (_currentUser.Role == "Admin") return query;
+        if (_currentUser.Role == "Admin" || _currentUser.HasFullDataAccess) return query;
         var userId = _currentUser.UserId;
         return query.Where(x =>
             x.IncidentReport.SubmittedByUserId == userId ||
@@ -56,7 +56,7 @@ public class AlertDashboardService : IAlertDashboardService
 
     private IQueryable<IncidentNotification> ApplyNotificationUserScope(IQueryable<IncidentNotification> query)
     {
-        if (_currentUser.Role == "Admin") return query;
+        if (_currentUser.Role == "Admin" || _currentUser.HasFullDataAccess) return query;
         var userId = _currentUser.UserId;
         return query.Where(x =>
             x.IncidentReport.SubmittedByUserId == userId ||

@@ -21,6 +21,7 @@ public class UserResponseDto
     public DateTime? LastLogin { get; set; }
     public DateTime CreatedAt { get; set; }
     public string? ProfileImage { get; set; }
+    public bool HasFullDataAccess { get; set; }
     public List<AvailabilityDto> Availability { get; set; } = [];
 }
 
@@ -39,4 +40,9 @@ public class UpdateUserProfessionDto
     public int? ProfessionId { get; set; }
     public int? PositionId { get; set; }
     public string? PhoneNumber { get; set; }
+}
+
+public class UpdateUserDataAccessDto
+{
+    [Required] public bool HasFullDataAccess { get; set; }
 }
