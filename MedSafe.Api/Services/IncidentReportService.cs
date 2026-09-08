@@ -529,7 +529,7 @@ public class IncidentReportService : IIncidentReportService
         return new IncidentReport
         {
             // System generated
-            IncidentReportNumber = GenerateIncidentReportNumber(),
+            IncidentReportNumber = GenerateIncidentReportNumber(isMedicationError),
             PatientReferenceToken = GeneratePatientReferenceToken(),
             SubmittedAt = DateTime.UtcNow,
             SubmittedByUserId = _currentUser.UserId,
@@ -790,10 +790,11 @@ public class IncidentReportService : IIncidentReportService
 
     private static string GeneratePatientReferenceToken() => $"PT-{Guid.NewGuid():N}".ToUpperInvariant();
 
-    private static string GenerateIncidentReportNumber()
+    private static string GenerateIncidentReportNumber(bool isMedicationError)
     {
         var uniquePart = Guid.NewGuid().ToString("N")[..8].ToUpperInvariant();
-        return $"IR-{DateTime.UtcNow:yyyyMMdd}-{uniquePart}";
+        var prefix = isMedicationError ? "MD" : "ADR";
+        return $"{prefix}-{DateTime.UtcNow:yyyyMMdd}-{uniquePart}";
     }
 
     private async Task<IncidentReportDto> MapToDtoAsync(IncidentReport r, CancellationToken cancellationToken)
