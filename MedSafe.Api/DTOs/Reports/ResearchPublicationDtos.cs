@@ -49,11 +49,18 @@ public sealed class OrcidExchangeRequestDto
 }
 
 // What ORCID's own token endpoint returns — deserialized straight off its JSON
-// response (snake_case field names), read only for the fields we need.
+// response (snake_case field names). Returned both by the initial authorization_code
+// exchange and by the refresh_token grant (RefreshOrcidTokenIfNeededAsync), so it
+// carries the token-lifecycle fields (RefreshToken/ExpiresIn) needed to persist and
+// later renew the connection, not just the identity fields (Orcid/Name).
 public sealed class OrcidTokenResponse
 {
     [System.Text.Json.Serialization.JsonPropertyName("access_token")]
     public string? AccessToken { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("refresh_token")]
+    public string? RefreshToken { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("expires_in")]
+    public int? ExpiresIn { get; set; }
     [System.Text.Json.Serialization.JsonPropertyName("orcid")]
     public string? Orcid { get; set; }
     [System.Text.Json.Serialization.JsonPropertyName("name")]

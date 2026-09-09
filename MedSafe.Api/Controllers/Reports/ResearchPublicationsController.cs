@@ -113,6 +113,10 @@ public class ResearchPublicationsController : ControllerBase
     public async Task<IActionResult> GetOrcid()
     {
         var profile = await _db.ResearcherProfiles.FirstOrDefaultAsync(p => p.UserId == _currentUser.UserId);
+        // Every time the frontend checks the ORCID connection (Research & Publications
+        // page load), quietly renew the stored access token if it's expired or close to
+        // it — keeps the connection alive without the user ever re-clicking "Connect".
+        if (profile != null) await RefreshOrcidTokenIfNeededAsync(profile);
         return Ok(new ResearcherProfileDto { Orcid = profile?.Orcid ?? string.Empty, Name = profile?.Name, Verified = profile?.Verified ?? false });
     }
 
@@ -132,6 +136,13 @@ public class ResearchPublicationsController : ControllerBase
             profile.Orcid = dto.Orcid;
             profile.Name = null;
             profile.Verified = false;
+            // A manually-typed iD replaces whatever OAuth connection was here before
+            // (it may not even be the same ORCID account) — drop the now-stale tokens
+            // rather than leaving them around to be silently refreshed against a
+            // different iD than what's now on the profile.
+            profile.AccessToken = null;
+            profile.RefreshToken = null;
+            profile.TokenExpiresAt = null;
         }
 
         await _db.SaveChangesAsync();
@@ -200,9 +211,62 @@ public class ResearchPublicationsController : ControllerBase
         profile.Orcid = token.Orcid;
         profile.Name = token.Name;
         profile.Verified = true;
+        // Persist the connection itself, not just the identity it verified — lets
+        // RefreshOrcidTokenIfNeededAsync keep calling ORCID on this user's behalf
+        // later without making them click "Connect" again every time the token expires.
+        profile.AccessToken = token.AccessToken;
+        profile.RefreshToken = token.RefreshToken;
+        profile.TokenExpiresAt = token.ExpiresIn.HasValue ? DateTime.UtcNow.AddSeconds(token.ExpiresIn.Value) : null;
 
         await _db.SaveChangesAsync();
         return Ok(new ResearcherProfileDto { Orcid = profile.Orcid, Name = profile.Name, Verified = profile.Verified });
+    }
+
+    // Renews the stored ORCID access token via the refresh_token grant once it's
+    // expired or within 60 seconds of expiring — called from GetOrcid() so the
+    // connection stays usable indefinitely without the user re-connecting. A no-op
+    // when there's nothing to refresh (never connected, or connected via the manual
+    // typed-iD path which never had a token). Failures here are swallowed rather
+    // than surfaced: token freshness is a background concern, and the next call
+    // just tries again with whatever token is still on file.
+    private async Task RefreshOrcidTokenIfNeededAsync(ResearcherProfile profile)
+    {
+        if (string.IsNullOrWhiteSpace(profile.RefreshToken)) return;
+        if (profile.TokenExpiresAt.HasValue && profile.TokenExpiresAt.Value > DateTime.UtcNow.AddSeconds(60)) return;
+
+        var client = _httpClientFactory.CreateClient();
+        var form = new FormUrlEncodedContent(new Dictionary<string, string>
+        {
+            ["client_id"] = _config["Orcid:ClientId"] ?? string.Empty,
+            ["client_secret"] = _config["Orcid:ClientSecret"] ?? string.Empty,
+            ["grant_type"] = "refresh_token",
+            ["refresh_token"] = profile.RefreshToken,
+        });
+        form.Headers.ContentType = new MediaTypeHeaderValue("application/x-www-form-urlencoded");
+
+        var request = new HttpRequestMessage(HttpMethod.Post, _config["Orcid:TokenUrl"]) { Content = form };
+        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+
+        try
+        {
+            var response = await client.SendAsync(request);
+            var rawBody = await response.Content.ReadAsStringAsync();
+            if (!response.IsSuccessStatusCode) return;
+
+            var refreshed = System.Text.Json.JsonSerializer.Deserialize<OrcidTokenResponse>(rawBody);
+            if (refreshed == null || string.IsNullOrWhiteSpace(refreshed.AccessToken)) return;
+
+            profile.AccessToken = refreshed.AccessToken;
+            // ORCID doesn't always rotate the refresh token on renewal — keep the
+            // existing one if the response didn't include a new one.
+            if (!string.IsNullOrWhiteSpace(refreshed.RefreshToken)) profile.RefreshToken = refreshed.RefreshToken;
+            profile.TokenExpiresAt = refreshed.ExpiresIn.HasValue ? DateTime.UtcNow.AddSeconds(refreshed.ExpiresIn.Value) : null;
+            await _db.SaveChangesAsync();
+        }
+        catch
+        {
+            // Network hiccup reaching orcid.org — leave the stale token in place.
+        }
     }
 
     private static ResearchPublicationDto MapToDto(ResearchPublication p) => new()
