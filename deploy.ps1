@@ -1,12 +1,12 @@
-param(
+ï»¿param(
     [string]$Configuration = "Release",
     [string]$ProjectPath = (Join-Path $PSScriptRoot "MedSafe.Api/MedSafe.Api.csproj"),
     [string]$PublishDir = (Join-Path $PSScriptRoot "MedSafe.Api/publish"),
-    [string]$SiteName = "medsafe-001-site1",
-    [string]$ComputerName = "https://win8100.site4now.net:8172/msdeploy.axd?site=medsafe-001-site1",
-    [string]$UserName = "medsafe-001",
-    [string]$Password = $env:WEBDEPLOY_PASSWORD,
-    [string]$ApiUrl = "https://medsafe-001-site1.etempurl.com/"
+    [string]$SiteName = "qaximdevgmailc-001-site1",
+    [string]$ComputerName = "https://win8244.site4now.net:8172/msdeploy.axd?site=qaximdevgmailc-001-site1",
+    [string]$UserName = "qaximdevgmailc-001",
+    [string]$Password = $(if ($env:WEBDEPLOY_PASSWORD) { $env:WEBDEPLOY_PASSWORD } else { "D2h#LiGxqdKtuMy" }),
+    [string]$ApiUrl = "http://qaximdevgmailc-001-site1.ktempurl.com/"
 )
 
 # Set the WEBDEPLOY_PASSWORD environment variable or pass -Password before running.
@@ -79,10 +79,10 @@ try {
             $xml.Save($webConfigPath)
             Write-Log "Injected ASPNETCORE_ENVIRONMENT=Production into web.config"
         } else {
-            Write-Log "WARNING: aspNetCore element not found in web.config — skipping env injection"
+            Write-Log "WARNING: aspNetCore element not found in web.config â€” skipping env injection"
         }
     } else {
-        Write-Log "WARNING: web.config not found in publish dir — skipping env injection"
+        Write-Log "WARNING: web.config not found in publish dir â€” skipping env injection"
     }
 
     $msdeploy = "C:/Program Files/IIS/Microsoft Web Deploy V3/msdeploy.exe"
